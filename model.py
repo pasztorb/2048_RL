@@ -1,4 +1,5 @@
 import numpy as np
+import sys
 from game import *
 
 from keras.models import Sequential, Model
@@ -6,7 +7,7 @@ from keras.layers import Dense, Dropout, Activation, Flatten, Conv3D, Input, con
 from keras.optimizers import Adam, SGD, RMSprop
 from keras.regularizers import l2
 
-epochs = 20
+epochs = int(sys.argv[1])
 gamma = 0.9
 epsilon = 1
 batch_size = 60
