@@ -157,7 +157,7 @@ def action_move(state, score, move, end_check = True):
     return new_state, new_score, running
 
 
-def test_play(model = None, reshape_function = None,visualize=True):
+def test_play(model = None, reshape_function = None, visualize=True):
     """
     Function to play a game based on the feeded model or randomly.
     :param model: If given the function plays a game based on its output.
@@ -185,6 +185,16 @@ def test_play(model = None, reshape_function = None,visualize=True):
             visualize_state(game, score)
         # If it traps into a pit where it makes the same move over and over it terminates the game
         if score_list[-10:] == [score]*10:
-            print("Not good enough, trapped")
+            if visualize:
+                print("Not good enough, trapped")
             running = False
     return score_list, game_list
+
+
+def avg_test_plays(plays_num, model=None ,reshape_function=None):
+    list_of_scores = []
+    for i in range(plays_num):
+        scores, _ = test_play(model, reshape_function, visualize=False)
+        list_of_scores += [scores[-1]]
+
+    return list_of_scores
