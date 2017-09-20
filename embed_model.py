@@ -27,6 +27,15 @@ embedding_size = 8
 pre_train_games = 1000
 
 
+def reshape_state(state):
+    """
+    Function that reshapes the given array for a 3D convolution. (i.e. adds two axes, one for the channels and one for the batch siez)
+    :param state: numpy array representing the current state
+    :return: reshaped array
+    """
+    return state[np.newaxis, :, :, :]
+
+
 """
 Different neural nets to work with
 """
@@ -141,11 +150,16 @@ def getReward(state, new_state, score, new_score, running):
 Main training function
 """
 
-def training(epochs, gamma, model, reshape_function, epsilon=1):
+def training(epochs, gamma, model, reshape_function, X_embedding, Y_embedding, epsilon=1):
     # Variables for storage during training
     replay = [] # List for replay storeage
     train_scores = []
     test_scores = []
+    train_games = []
+
+    # Lists to store game states for embedding
+    X_embed = X_embedding
+    Y_embed = Y_embedding
 
     # Play one game with random weights
     print("First game after initialization...")
@@ -157,13 +171,19 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
         print("Epsilon value: ", str(epsilon))
         # Initialize game
         game, score = initialize_game()
+        # Train game states
+        game_states = [game]
+        # Variable to keep in charge the running
         running = True
         while running:
+
             # Evaluate on the current state
             qval = model.predict(reshape_function(game), batch_size=1)
-            if (np.random.random() < epsilon):  # choose random action
+
+            # Choose if the action is random or not
+            if (np.random.random() < epsilon):
                 action = np.random.randint(0, 4)
-            else:  # choose best action from Q(s,a) values
+            else:
                 action = np.argmax(qval)
 
             # Make a move
@@ -212,23 +232,39 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
             # Update game and score variables
             game = new_game
             score = new_score
+            # Add game to game_states
+            game_states += [game]
 
         # Store and print score at the end of the training game
         train_scores += [score]
         print("Score at the end of the training game: ", str(score))
+
+        # Add game_states list to train_games list
+        train_games += [game_states]
 
         # Reduce epsilon value after game finished
         if epsilon > 0.1:
             epsilon -= (1 / epochs)
 
         # If one hundredth of the game has passed play a test game
+        # Add update embedding
         if (epoch % (epochs//test_num)) == 0:
             print("Current epsilon value: ", str(epsilon))
+
             # Test play
             score_list = avg_test_plays(10, model=model, reshape_function=reshape_function)
             print("Average, min and max of the test scores: ", np.mean(score_list), min(score_list), max(score_list))
             test_scores += [np.mean(score_list)] # Store test score
             print("Maximum average score after Game %s: " % (epoch + 1,), str(max(test_scores)))
+
+            # Update embedding
+            X_embed_new, Y_embed_new = games_to_trainable(train_games)
+            # Drop some entries from the previous game and add the new embeddings
+
+            # Train embeddings model
+
+            # Update weight of model
+
 
     # Train on the remaining samples in the replay list
     print("Train on the remaining samples")
@@ -251,13 +287,13 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
 
 
 # Initialize embedding model
-embed_model = init_and_pretrain_embed_model(embedding_size, pre_train_games)
+embed_model, X_embed, Y_embed = init_and_pretrain_embed_model(embedding_size, pre_train_games)
 
 # Initialize model
 model = init_model(game_shape, embed_model)
 
 # Run training on model and reshape function
-train_scores, test_scores = training(epochs, gamma, model)
+train_scores, test_scores = training(epochs, gamma, model, reshape_state, X_embed, Y_embed)
 
 
 # Plot the train_scores and test_scores and save it in a .png file

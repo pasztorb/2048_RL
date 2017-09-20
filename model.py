@@ -168,12 +168,12 @@ Reward function
 def getReward(state, new_state, score, new_score, running):
     # if it makes a move that does not change the placement of the tiles
     if running and ((state==new_state).sum()==game_shape[0]*game_shape[1]*game_shape[2]):
-        return -10
+        return -3
     # If the game ended
     elif not running:
-        return -50
+        return -20
     else:
-        return 3
+        return 1
 
 
 """
@@ -309,4 +309,6 @@ train_scores, test_scores = training(epochs, gamma, model, reshape_function)
 plt.plot(range(1, epochs+1), train_scores, label='Train scores')
 plt.plot(list(range(1, epochs+1, epochs//test_num)), test_scores, label='Test scores averages')
 plt.legend(loc='upper left')
+plt.title("Training outcome:")
+
 plt.savefig(plot_path)

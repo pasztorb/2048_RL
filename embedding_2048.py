@@ -108,7 +108,7 @@ def init_and_pretrain_embed_model(embed_size, pre_train_games):
     X_train, Y_train = games_to_trainable(games)
     model = init_embed_model(embed_size)
     model = train_embed_model(model, X_train, Y_train)
-    return model
+    return model, X_train, Y_train
 
 """
 print("playing the initial random plays")
