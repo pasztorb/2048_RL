@@ -1,6 +1,7 @@
 import numpy as np
 import sys
 from game import *
+from embedding_2048 import *
 
 from keras.models import Model
 from keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, Input, concatenate
@@ -18,130 +19,89 @@ plot_path = sys.argv[3]
 # Fixed variables
 gamma = 0.9
 epsilon = 1
-batch_size = 200
-buffer = 1000
+batch_size = 60
+buffer = 600
 test_num = 50
 game_shape = (20, 4, 4)
-
-# Set game_shape_after_reshaping based on reshape_type
-if reshape_type == 'onehot':
-    game_shape_after_reshaping = (20, 4, 4)
-elif reshape_type == 'linear':
-    game_shape_after_reshaping = (1, 4, 4)
-elif reshape_type == 'trig':
-    game_shape_after_reshaping = (3, 4, 4)
-
-"""
-Different function for reshaping the 20x4x4 array before feeding into the neural network
-"""
-
-def reshape_state(state):
-    """
-    Function that reshapes the given array for a 3D convolution. (i.e. adds two axes, one for the channels and one for the batch siez)
-    :param state: numpy array representing the current state
-    :return: reshaped array
-    """
-    return state[np.newaxis, :, :, :]
-
-
-def linear_reshape(state):
-    """
-    This function reshapes the state variable as a 1x4x4 matrix where each tile is represented as number between 0 and 1. The higher value tiles are represented by larger numbers.
-    :param state: 20x4x4 numpy array
-    :return: 1x4x4 numpy array
-    """
-    # Linear scale from 0 to 1. 21 samples for the 20 different tiles plus zero
-    linear_scale = np.linspace(0,1,20)
-    # New 1x4x4 array for the new state
-    new_state = np.zeros((1,4,4))
-
-    for j in range(4): # Iteration for the columns
-        for i in range(4): # Iteration for the rows
-            index = np.where(state[:,i,j] == 1)[0][0]
-            new_state[:,i,j] = linear_scale[index]
-
-    return new_state[np.newaxis,:,:,:]
-
-
-def trig_reshape(state):
-    lin_scale = np.linspace(0, 1, 20, endpoint=True)
-    sine_scale = np.sin(lin_scale * 2 * np.pi)
-    cos_scale = np.cos(lin_scale * 2 * np.pi)
-    sigmoid_scale = 1/(1 + np.exp(-0.5*(lin_scale*20-10)))
-    three_chanel_scale = np.stack([sine_scale, cos_scale, sigmoid_scale])
-
-    # New 1x4x4 array for the new state
-    new_state = np.zeros((3,4,4))
-
-    # Iterate over the tiles to fill in the new_state variable
-    state_sum = state.sum(axis=0)
-    for j in range(4): # Iteration for the columns
-        for i in range(4): # Iteration for the rows
-            index = np.where(state[:,i,j] == 1)[0][0]
-            new_state[:,i,j] = three_chanel_scale[:,index]
-
-    return new_state[np.newaxis, :, :, :]
+embedding_size = 8
+pre_train_games = 1000
 
 
 """
 Different neural nets to work with
 """
 
-
-def init_model(input_shape):
+def init_model(input_shape, embed_model):
     filter_size_1 = 16
+    # Input
     state_input = Input((input_shape[0],input_shape[1],input_shape[2]))
+    # Embedding convolution
+    embedding_weights = embed_model.get_layer(name='embed_conv').get_weights()
+    embed_conv = Conv2D(filters = embedding_size,
+                        kernel_size = (1, 1),
+                        strides = (1, 1),
+                        use_bias = False,
+                        trainable = False,
+                        name = 'embed_conv',
+                        data_format = "channels_first")
+    embed_conv.set_weights(embedding_weights)
+    embed_input = embed_conv(state_input)
+
+    # Convolution along the rows
     row_conv_2 = Conv2D(filters = filter_size_1,
                       kernel_size=(1,2),
                       strides=(1,1),
                       data_format="channels_first",
                       activation="relu"
-                      )(state_input)
+                      )(embed_input)
     row_conv_3 = Conv2D(filters = filter_size_1,
                       kernel_size=(1,2),
                       strides=(1,1),
                       data_format="channels_first",
                       dilation_rate=(1,2),
                       activation="relu"
-                      )(state_input)
+                      )(embed_input)
     row_conv_4 = Conv2D(filters = filter_size_1,
                       kernel_size=(1,2),
                       strides=(1,1),
                       data_format="channels_first",
                       dilation_rate=(1,3),
                       activation="relu"
-                      )(state_input)
+                      )(embed_input)
     row_flat_2 = Flatten()(row_conv_2)
     row_flat_3 = Flatten()(row_conv_3)
     row_flat_4 = Flatten()(row_conv_4)
 
+    # Convoltuion along the columns
     col_conv_2 = Conv2D(filters = filter_size_1,
                       kernel_size=(2,1),
                       strides=(1,1),
                       data_format="channels_first",
                       activation="relu"
-                      )(state_input)
+                      )(embed_input)
     col_conv_3 = Conv2D(filters = filter_size_1,
                       kernel_size=(2,1),
                       strides=(1,1),
                       data_format="channels_first",
                       dilation_rate=(2,1),
                       activation="relu"
-                      )(state_input)
+                      )(embed_input)
     col_conv_4 = Conv2D(filters = filter_size_1,
                       kernel_size=(2,1),
                       strides=(1,1),
                       data_format="channels_first",
                       dilation_rate=(3,1),
                       activation="relu"
-                      )(state_input)
+                      )(embed_input)
     col_flat_2 = Flatten()(col_conv_2)
     col_flat_3 = Flatten()(col_conv_3)
     col_flat_4 = Flatten()(col_conv_4)
 
+    # Concatenate the outputs
     output = concatenate([row_flat_2, row_flat_3, row_flat_4, col_flat_2, col_flat_3, col_flat_4])
 
-    output = Dense(1024,
+    # Dense Layers
+    output = Dense(512,
                    activation='relu',
                    kernel_regularizer=l2(0.002)
                    )(output)
@@ -150,13 +110,14 @@ def init_model(input_shape):
                    kernel_regularizer=l2(0.002)
                    )(output)
 
+    # Output layer
     output = Dense(4, activation='linear')(output)
 
     model = Model(inputs=state_input, outputs=output)
 
     print(model.summary())
 
-    opt = Adam()
+    opt = RMSprop()
     model.compile(loss='mse', optimizer=opt)
     return model
 
@@ -289,20 +250,14 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
     return train_scores, test_scores
 
 
+# Initialize embedding model
+embed_model = init_and_pretrain_embed_model(embedding_size, pre_train_games)
 
 # Initialize model
-model = init_model(game_shape_after_reshaping)
-
-# Choose reshape function based on reshape_type
-if reshape_type == 'onehot':
-    reshape_function = reshape_state
-elif reshape_type == 'linear':
-    reshape_function = linear_reshape
-elif reshape_type == 'trig':
-    reshape_function = trig_reshape
+model = init_model(game_shape, embed_model)
 
 # Run training on model and reshape function
-train_scores, test_scores = training(epochs, gamma, model, reshape_function)
+train_scores, test_scores = training(epochs, gamma, model)
 
 
 # Plot the train_scores and test_scores and save it in a .png file

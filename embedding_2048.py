@@ -47,9 +47,7 @@ def games_to_trainable(list_of_games):
     return X_train, Y_train
 
 
-def init_embed_model():
-    embed_size = 8
-
+def init_embed_model(embed_size):
     # Inputs
     input_1 = Input((20, 4, 4), name = 'input_1') # Input for the state before
     input_2 = Input((20, 4, 4), name = 'input_2') # Input for the state after
@@ -105,12 +103,19 @@ def train_embed_model(model, X_train_list, Y_train_list):
 
     return model
 
+def init_and_pretrain_embed_model(embed_size, pre_train_games):
+    games = initial_random_plays(pre_train_games)
+    X_train, Y_train = games_to_trainable(games)
+    model = init_embed_model(embed_size)
+    model = train_embed_model(model, X_train, Y_train)
+    return model
+
 """
 print("playing the initial random plays")
 games = initial_random_plays(int(sys.argv[1]))
 print("Reshaping the games")
 X_train, Y_train = games_to_trainable(games)
-model = init_embed_model()
+model = init_embed_model(8)
 model = train_embed_model(model, X_train, Y_train)
 embedding = model.get_layer(name='embed_conv')
 print(embedding.get_weights()[0])
