@@ -2,8 +2,13 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="b1eabd5a-96d6-4bd3-addc-4bf3d7a5e194" name="Default" comment="">
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/embed_model.py" afterPath="$PROJECT_DIR$/embed_model.py" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/embedding_2048.py" afterPath="$PROJECT_DIR$/embedding_2048.py" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/1000_onehot_16filter.png" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/train_test_scores_10000_onehot.png" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/train_test_scores_10000_onehot_avg.png" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/train_test_scores_1000_onehot_avg.png" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/train_test_scores_1000_trig_avg.png" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/train_test_scores_2000_linear.png" afterPath="" />
+      <change type="DELETED" beforePath="$PROJECT_DIR$/train_test_scores_2000_onehot.png" afterPath="" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/model.py" afterPath="$PROJECT_DIR$/model.py" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
@@ -29,8 +34,8 @@
       <file leaf-file-name="model.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/model.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="595">
-              <caret line="311" column="28" lean-forward="false" selection-start-line="311" selection-start-column="28" selection-end-line="311" selection-end-column="28" />
+            <state relative-caret-position="225">
+              <caret line="15" column="12" lean-forward="false" selection-start-line="15" selection-start-column="12" selection-end-line="15" selection-end-column="12" />
               <folding>
                 <element signature="e#0#18#0" expanded="true" />
               </folding>
@@ -810,8 +815,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/model.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="595">
-          <caret line="311" column="28" lean-forward="false" selection-start-line="311" selection-start-column="28" selection-end-line="311" selection-end-column="28" />
+        <state relative-caret-position="225">
+          <caret line="15" column="12" lean-forward="false" selection-start-line="15" selection-start-column="12" selection-end-line="15" selection-end-column="12" />
           <folding>
             <element signature="e#0#18#0" expanded="true" />
           </folding>

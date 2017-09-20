@@ -172,6 +172,7 @@ def getReward(state, new_state, score, new_score, running):
     # If the game ended
     elif not running:
         return -20
+    # Else if it made a valid move
     else:
         return 1
 
@@ -182,9 +183,9 @@ Main training function
 
 def training(epochs, gamma, model, reshape_function, epsilon=1):
     # Variables for storage during training
-    replay = [] # List for replay storeage
-    train_scores = []
-    test_scores = []
+    replay = [] # Replay storeage
+    train_scores = [] # Scores at the end of the training games
+    test_scores = [] # Scores at the end of the test games
 
     # Play one game with random weights
     print("First game after initialization...")
@@ -194,15 +195,20 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
     for epoch in range(epochs):
         print("Epcoh number: ", str(epoch+1))
         print("Epsilon value: ", str(epsilon))
+
         # Initialize game
         game, score = initialize_game()
+
+        # Running variable for looping
         running = True
         while running:
             # Evaluate on the current state
             qval = model.predict(reshape_function(game), batch_size=1)
-            if (np.random.random() < epsilon):  # choose random action
+
+            # Choose if the next action is random or not
+            if (np.random.random() < epsilon):
                 action = np.random.randint(0, 4)
-            else:  # choose best action from Q(s,a) values
+            else:
                 action = np.argmax(qval)
 
             # Make a move
@@ -218,7 +224,9 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
             # Calculate the target output
             y = np.zeros((1, 4))
             y[:] = qval[:]
-            if running == True and reward != -3:  # non-terminal state and not an invalid move
+
+            # Calculate update value
+            if running == True and ((game==new_game).sum() != game_shape[0]*game_shape[1]*game_shape[2]):  # non-terminal state and not an invalid move
                 update = (reward + (gamma * maxQ))
             else:  # terminal state
                 update = reward
@@ -260,7 +268,7 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
         if epsilon > 0.1:
             epsilon -= (1 / epochs)
 
-        # If one hundredth of the game has passed play a test game
+        # If one test_num games have passed play a test game
         if (epoch % (epochs//test_num)) == 0:
             print("Current epsilon value: ", str(epsilon))
             # Test play
