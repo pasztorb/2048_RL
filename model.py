@@ -51,19 +51,14 @@ def linear_reshape(state):
     :return: 1x4x4 numpy array
     """
     # Linear scale from 0 to 1. 21 samples for the 20 different tiles plus zero
-    linear_scale = np.linspace(0,1,21)
+    linear_scale = np.linspace(0,1,20)
     # New 1x4x4 array for the new state
     new_state = np.zeros((1,4,4))
 
-    # Iterate over the tiles to fill in the new_state variable
-    state_sum = state.sum(axis=0)
     for j in range(4): # Iteration for the columns
         for i in range(4): # Iteration for the rows
-            if state_sum[i,j] == 0: # If there is nothing in that tile skip it
-                continue
-            else:
-                index = np.where(state[:,i,j] == 1)[0][0]
-                new_state[:,i,j] = linear_scale[index+1]
+            index = np.where(state[:,i,j] == 1)[0][0]
+            new_state[:,i,j] = linear_scale[index]
 
     return new_state[np.newaxis,:,:,:]
 
@@ -82,11 +77,8 @@ def trig_reshape(state):
     state_sum = state.sum(axis=0)
     for j in range(4): # Iteration for the columns
         for i in range(4): # Iteration for the rows
-            if state_sum[i,j] == 0: # If there is nothing in that tile skip it
-                continue
-            else:
-                index = np.where(state[:,i,j] == 1)[0][0]
-                new_state[:,i,j] = three_chanel_scale[:,index]
+            index = np.where(state[:,i,j] == 1)[0][0]
+            new_state[:,i,j] = three_chanel_scale[:,index]
 
     return new_state[np.newaxis, :, :, :]
 
@@ -97,8 +89,7 @@ Different neural nets to work with
 
 
 def init_model(input_shape):
-    filter_size_1 = 8
-    filter_size_2 = 32
+    filter_size_1 = 16
     state_input = Input((input_shape[0],input_shape[1],input_shape[2]))
     row_conv_2 = Conv2D(filters = filter_size_1,
                       kernel_size=(1,2),

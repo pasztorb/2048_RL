@@ -16,7 +16,7 @@ def visualize_state(state, score):
     for i in range(4): # Iterate over the rows
         row = [0,0,0,0]
         for j in range(4): # Iterate over the columns
-            value = np.where(state[:,i,j]==1)[0]
+            value = np.where(state[1:,i,j]==1)[0]
             if len(value)>1:
                 print("Not valid state")
             if len(value) == 1:
@@ -30,7 +30,7 @@ def add_tile(state):
     :return: new state of the game with the added tile
     """
     # sum of the array along the first array, if 0 it is empty if 1 it has a number in it
-    used_tiles = state.sum(axis=0)
+    used_tiles = state[1:,:,:].sum(axis=0)
     # possible index pairs to put number in it
     possible_tiles = np.where(used_tiles==0)
     # If there is no possible tile, it returns the original state
@@ -40,7 +40,9 @@ def add_tile(state):
         # choose one randomly
         index = np.random.randint(len(possible_tiles[0]))
         # add a tile 2 to the chosen tile
-        state[0,possible_tiles[0][index],possible_tiles[1][index]] = 1
+        state[1, possible_tiles[0][index], possible_tiles[1][index]] = 1
+        state[0, possible_tiles[0][index], possible_tiles[1][index]] = 0
+
         return state
 
 def initialize_game():
@@ -48,8 +50,9 @@ def initialize_game():
     This function initialize a 4x4 game with two randomly added tile
     :return: 20X4X4 array of the current state, score integer: 0
     """
-    # empty game grid
-    state = np.zeros((game_shape[0],game_shape[1],game_shape[2]))
+    # empty game grid, only 1 in the first layer
+    state = np.zeros((game_shape[0],game_shape[1],game_shape[2]), dtype=np.int8)
+    state[0, :, :] = 1
     # add two tile randomly
     for i in range(2):
         state = add_tile(state)
@@ -79,7 +82,7 @@ def shift_row(row, score):
             columns_to_drop += [i]
     row_updated = np.delete(row_updated, columns_to_drop, 1)
     # Add rows to fill the dropped
-    row_updated = np.concatenate([row_updated, np.zeros((game_shape[0],len(columns_to_drop)))], axis=1)
+    row_updated = np.concatenate([row_updated, np.zeros((game_shape[0] - 1,len(columns_to_drop)))], axis=1)
 
     # Iterate over the all possible merging place
     temp_row = row_updated.copy() # Additional copy to avoid several merging of one tile
@@ -103,7 +106,7 @@ def shift_row(row, score):
             columns_to_drop += [i]
     row_updated = np.delete(row_updated, columns_to_drop, 1)
     # Add rows to fill the dropped
-    row_updated = np.concatenate([row_updated, np.zeros((game_shape[0],len(columns_to_drop)))], axis=1)
+    row_updated = np.concatenate([row_updated, np.zeros((game_shape[0] - 1,len(columns_to_drop)))], axis=1)
 
     return row_updated, score_updated
 
@@ -118,6 +121,8 @@ def action_move(state, score, move, end_check = True):
     assert move in [0,1,2,3]
     # Copy the state in order to keep the move from immediately change the state of the game
     new_state = state.copy()
+    # Cut down the first layer
+    new_state = new_state[1:, :, :]
     # Copy the original score so it won't update it automatically the original variable
     new_score = score
     for i in range(4): # Iterate over the chosen axis
@@ -138,6 +143,11 @@ def action_move(state, score, move, end_check = True):
             # Shifts each reverted rows and the revert them back
             new_state[:, i, :], new_score = shift_row(new_state[:, i, ::-1], new_score)
             new_state[:,i,:] = new_state[:,i,::-1]
+
+    # Add back the first layer to represent non-used tiles
+    first_layer = np.ones((1, 4, 4))
+    first_layer = first_layer - new_state.sum(axis=0)[np.newaxis, :, :]
+    new_state = np.concatenate([first_layer, new_state], axis=0)
 
     # Add a new tile only if there has been change in the placement of the original tiles
     if (new_state == state).sum() != game_shape[0]*game_shape[1]*game_shape[2]:
@@ -181,10 +191,13 @@ def test_play(model = None, reshape_function = None, visualize=True):
         score_list += [score]
         game_list += [game]
         if visualize:
-            print(qval)
+            if model == None:
+                print(action)
+            else:
+                print(qval)
             visualize_state(game, score)
         # If it traps into a pit where it makes the same move over and over it terminates the game
-        if score_list[-10:] == [score]*10:
+        if score_list[-20:] == [score]*20:
             if visualize:
                 print("Not good enough, trapped")
             running = False

@@ -1,4 +1,5 @@
 from game import *
+import sys
 
 from keras.models import Model
 from keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, Input, concatenate
@@ -28,31 +29,26 @@ def games_to_trainable(list_of_games):
     # Extract the lists from the games
     X_train = [[],[]]
     Y_train = []
-    for i in range(16):
-        Y_train += [[]]
 
+    # At each step add the current state to the X_train list's first list and the current state+2 to the second list
+    # At each step add the current state + 1 into the Y_train list reshaped to (20,16), i.e. each column represent one tile vector
     for game in list_of_games:
         for g in range(len(game)-2):
             X_train[0].append(game[g])
             X_train[1].append(game[g+2])
-            for i in range(16):
-                Y_train[i].append(game[g + 1][:, i // 4, i % 4])
+            Y_train.append(game[g].reshape((20,16)))
 
+    # Make one array from the several arrays
     X_train = [np.array(x) for x in X_train]
-    Y_train = [np.array(y) for y in Y_train]
-
-    for x in X_train:
-        print(x.shape)
-
-    for y in Y_train:
-        print(y.shape)
+    Y_train = np.array(Y_train)
+    # Split the Y_train array into 16 different lists for the different columns
+    Y_train = [Y_train[:, :, i] for i in range(16)]
 
     return X_train, Y_train
 
 
-
 def init_embed_model():
-    embed_size = 12
+    embed_size = 8
 
     # Inputs
     input_1 = Input((20, 4, 4), name = 'input_1') # Input for the state before
@@ -80,33 +76,43 @@ def init_embed_model():
     # Output
     outputs = []
     for i in range(16):
-        outputs += [Dense(16,
+        outputs += [Dense(20,
                          activation = 'softmax',
-                         name = 'output_'+str(i))(concat)]
+                         name = 'output_'+str(i+1))(concat)]
 
     # Define model
     model = Model(inputs = [input_1, input_2], outputs = outputs)
 
     # compile model
     model.compile(optimizer='rmsprop',
-                  loss='categorical_crossentropy')
+                  loss='categorical_crossentropy',
+                  metrics=['accuracy'])
+    print(model.summary())
 
     return model
 
 
 def train_embed_model(model, X_train_list, Y_train_list):
-    epoch_num = 100
-    batch_size = 20
+    epoch_num = 30
+    batch_size = 30
+    print("Training size: ", X_train_list[0].shape)
 
     model.fit(X_train_list,
               Y_train_list,
               epochs = epoch_num,
-              batch_size = batch_size)
+              batch_size = batch_size,
+              verbose=2)
 
     return model
 
-
-games = initial_random_plays(3)
+"""
+print("playing the initial random plays")
+games = initial_random_plays(int(sys.argv[1]))
+print("Reshaping the games")
 X_train, Y_train = games_to_trainable(games)
 model = init_embed_model()
-train_embed_model(model, X_train, Y_train)
+model = train_embed_model(model, X_train, Y_train)
+embedding = model.get_layer(name='embed_conv')
+print(embedding.get_weights()[0])
+print(embedding.get_weights()[0].shape)
+"""
