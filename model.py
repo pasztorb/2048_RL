@@ -89,7 +89,7 @@ Different neural nets to work with
 
 
 def init_model(input_shape):
-    filter_size_1 = 16
+    filter_size_1 = 32
     state_input = Input((input_shape[0],input_shape[1],input_shape[2]))
     row_conv_2 = Conv2D(filters = filter_size_1,
                       kernel_size=(1,2),
@@ -145,7 +145,7 @@ def init_model(input_shape):
                    activation='relu',
                    kernel_regularizer=l2(0.002)
                    )(output)
-    output = Dense(512,
+    output = Dense(1024,
                    activation='relu',
                    kernel_regularizer=l2(0.002)
                    )(output)
