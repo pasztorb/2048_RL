@@ -2,34 +2,29 @@ import numpy as np
 import sys
 from game import *
 
-from keras.models import Model
+from keras.models import Model, Sequential
 from keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, Input, concatenate
+from keras.layers.core import Permute
 from keras.optimizers import Adam, SGD, RMSprop
 from keras.regularizers import l2
+from keras import backend as K
 
 import matplotlib.pyplot as plt
 
 # Command line given variables
 epochs = int(sys.argv[1])
 reshape_type = sys.argv[2]
-assert reshape_type in ['onehot', 'linear', 'trig']
+assert reshape_type in ['onehot', 'linear', 'trig', 'flat']
 plot_path = sys.argv[3]
 
 # Fixed variables
-gamma = 0.9
+gamma = 0.99
 epsilon = 1
 batch_size = 200
 buffer = 1000
 test_num = 50
 game_shape = (20, 4, 4)
 
-# Set game_shape_after_reshaping based on reshape_type
-if reshape_type == 'onehot':
-    game_shape_after_reshaping = (20, 4, 4)
-elif reshape_type == 'linear':
-    game_shape_after_reshaping = (1, 4, 4)
-elif reshape_type == 'trig':
-    game_shape_after_reshaping = (3, 4, 4)
 
 """
 Different function for reshaping the 20x4x4 array before feeding into the neural network
@@ -82,13 +77,48 @@ def trig_reshape(state):
 
     return new_state[np.newaxis, :, :, :]
 
+def flat_reshape(state):
+    """
+    Function that reshapes the given array for a 3D convolution. (i.e. adds two axes, one for the channels and one for the batch siez)
+    :param state: numpy array representing the current state
+    :return: reshaped array
+    """
+    return state.reshape((1,state.shape[0]*state.shape[1]*state.shape[2]))
+
 
 """
 Different neural nets to work with
 """
 
 
-def init_model(input_shape):
+def init_flat_model():
+    """
+    Simple feed forward network
+    :return: compiled model
+    """
+    model = Sequential()
+    model.add(Dense(
+        1024,
+        activation='relu',
+        input_shape=(320,)
+    ))
+    model.add(Dense(
+        1024,
+        activation='relu'
+    ))
+    model.add(Dense(
+        4,
+        activation='linear'
+    ))
+
+    print(model.summary())
+
+    opt = Adam()
+    model.compile(loss='mse', optimizer=opt)
+
+    return model
+
+def init_conv_model_1(input_shape):
     filter_size_1 = 32
     state_input = Input((input_shape[0],input_shape[1],input_shape[2]))
     row_conv_2 = Conv2D(filters = filter_size_1,
@@ -161,18 +191,71 @@ def init_model(input_shape):
     return model
 
 
+def init_conv_model_2(input_shape):
+    filter_size_1 = 128
+    filter_size_2 = 128
+    state_input = Input((input_shape[0],input_shape[1],input_shape[2]))
+    permut_input = Permute((1,3,2),
+                           input_shape=(input_shape[0],input_shape[1],input_shape[2]))(state_input)
+
+    conv_2d = Conv2D(filters=filter_size_1,
+                     kernel_size=(4,1),
+                     strides=(4,1),
+                     data_format='channels_first',
+                     name='first_conv',
+                     input_shape=(input_shape[0],input_shape[1],input_shape[2]))
+    conv_1d = Conv2D(filters=filter_size_2,
+                     kernel_size=(1,1),
+                     strides=(1,1),
+                     data_format='channels_first',
+                     name='1x1_conv')
+
+    conv_1 = conv_2d(state_input)
+    conv_1 = conv_1d(conv_1)
+    conv_1 = Flatten()(conv_1)
+
+    conv_2 = conv_2d(permut_input)
+    conv_2 = conv_1d(conv_2)
+    conv_2 = Flatten()(conv_2)
+
+    output = concatenate([conv_1, conv_2])
+
+    output = Dense(1024,
+                   activation='relu'
+                   )(output)
+    output = Dense(4, activation='linear')(output)
+
+    model = Model(inputs=state_input, outputs=output)
+
+    print(model.summary())
+
+    opt = Adam()
+    model.compile(loss='mse', optimizer=opt)
+    return model
+
+
 """
-Reward function
+Reward function, and entropy calculation function
 """
+
+def state_entropy(state):
+    entropy = 0
+    for i in range(4): # Iteration over the rows (columns)
+        for j in range(3): # Iteration over the columns (rows)
+            entropy += np.linalg.norm(state[:, i, j]-state[:, i, j + 1],2)
+            entropy += np.linalg.norm(state[:, j, i]-state[:, j + 1, i],2)
+    return entropy/16
 
 def getReward(state, new_state, score, new_score, running):
     # if it makes a move that does not change the placement of the tiles
-    if running and ((state==new_state).sum()==game_shape[0]*game_shape[1]*game_shape[2]):
-        return -3
-    # If the game ended
-    elif not running:
+    if not running:
         return -20
+    # If the game ended
+    elif running and ((state==new_state).sum()==game_shape[0]*game_shape[1]*game_shape[2]):
+        return -1
     # Else if it made a valid move
+    elif np.where(state==1)[0].max() < np.where(new_state==1)[0].max():
+        return 2
     else:
         return 1
 
@@ -272,7 +355,7 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
         if (epoch % (epochs//test_num)) == 0:
             print("Current epsilon value: ", str(epsilon))
             # Test play
-            score_list = avg_test_plays(10, model=model, reshape_function=reshape_function)
+            score_list = avg_test_plays(20, model=model, reshape_function=reshape_function)
             print("Average, min and max of the test scores: ", np.mean(score_list), min(score_list), max(score_list))
             test_scores += [np.mean(score_list)] # Store test score
             print("Maximum average score after Game %s: " % (epoch + 1,), str(max(test_scores)))
@@ -297,17 +380,25 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
     return train_scores, test_scores
 
 
-
-# Initialize model
-model = init_model(game_shape_after_reshaping)
-
 # Choose reshape function based on reshape_type
 if reshape_type == 'onehot':
     reshape_function = reshape_state
+    game_shape_after_reshaping = (20, 4, 4)
 elif reshape_type == 'linear':
     reshape_function = linear_reshape
+    game_shape_after_reshaping = (1, 4, 4)
 elif reshape_type == 'trig':
     reshape_function = trig_reshape
+    game_shape_after_reshaping = (3, 4, 4)
+elif reshape_type == 'flat':
+    reshape_function = flat_reshape
+
+
+# Initialize model, if reshape_style is 'flat' initialize a feed-forward net otherwise a convolutional
+if reshape_type in ['onehot', 'linear', 'trig']:
+    model = init_conv_model_2(game_shape_after_reshaping)
+else:
+    model = init_flat_model()
 
 # Run training on model and reshape function
 train_scores, test_scores = training(epochs, gamma, model, reshape_function)
@@ -317,6 +408,6 @@ train_scores, test_scores = training(epochs, gamma, model, reshape_function)
 plt.plot(range(1, epochs+1), train_scores, label='Train scores')
 plt.plot(list(range(1, epochs+1, epochs//test_num)), test_scores, label='Test scores averages')
 plt.legend(loc='upper left')
-plt.title("Training outcome:")
+plt.title("Training on "+str(epochs)+" games")
 
 plt.savefig(plot_path)
