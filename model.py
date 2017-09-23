@@ -252,7 +252,7 @@ def getReward(state, new_state, score, new_score, running):
         return -20
     # If the game ended
     elif running and ((state==new_state).sum()==game_shape[0]*game_shape[1]*game_shape[2]):
-        return -1
+        return -3
     # Else if it made a valid move
     elif np.where(state==1)[0].max() < np.where(new_state==1)[0].max():
         return 2
