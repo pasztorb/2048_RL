@@ -1,237 +1,25 @@
 import numpy as np
 import sys
+import h5py
+import time
+import datetime
+
 from game import *
+from reshape_and_NN import *
 
-from keras.models import Model, Sequential
-from keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, Input, concatenate
-from keras.layers.core import Permute
-from keras.optimizers import Adam, SGD, RMSprop
-from keras.regularizers import l2
-from keras import backend as K
-
-import matplotlib.pyplot as plt
-
-# Command line given variables
+# Variables given in command lines
 epochs = int(sys.argv[1])
 reshape_type = sys.argv[2]
 assert reshape_type in ['onehot', 'linear', 'trig', 'flat']
-plot_path = sys.argv[3]
+output_path = sys.argv[3]
 
 # Fixed variables
-gamma = 0.99
+gamma = 0.9
 epsilon = 1
-batch_size = 200
+batch_size = 300
 buffer = 1000
 test_num = 50
 game_shape = (20, 4, 4)
-
-
-"""
-Different function for reshaping the 20x4x4 array before feeding into the neural network
-"""
-
-def reshape_state(state):
-    """
-    Function that reshapes the given array for a 3D convolution. (i.e. adds two axes, one for the channels and one for the batch siez)
-    :param state: numpy array representing the current state
-    :return: reshaped array
-    """
-    return state[np.newaxis, :, :, :]
-
-
-def linear_reshape(state):
-    """
-    This function reshapes the state variable as a 1x4x4 matrix where each tile is represented as number between 0 and 1. The higher value tiles are represented by larger numbers.
-    :param state: 20x4x4 numpy array
-    :return: 1x4x4 numpy array
-    """
-    # Linear scale from 0 to 1. 21 samples for the 20 different tiles plus zero
-    linear_scale = np.linspace(0,1,20)
-    # New 1x4x4 array for the new state
-    new_state = np.zeros((1,4,4))
-
-    for j in range(4): # Iteration for the columns
-        for i in range(4): # Iteration for the rows
-            index = np.where(state[:,i,j] == 1)[0][0]
-            new_state[:,i,j] = linear_scale[index]
-
-    return new_state[np.newaxis,:,:,:]
-
-
-def trig_reshape(state):
-    lin_scale = np.linspace(0, 1, 20, endpoint=True)
-    sine_scale = np.sin(lin_scale * 2 * np.pi)
-    cos_scale = np.cos(lin_scale * 2 * np.pi)
-    sigmoid_scale = 1/(1 + np.exp(-0.5*(lin_scale*20-10)))
-    three_chanel_scale = np.stack([sine_scale, cos_scale, sigmoid_scale])
-
-    # New 1x4x4 array for the new state
-    new_state = np.zeros((3,4,4))
-
-    # Iterate over the tiles to fill in the new_state variable
-    state_sum = state.sum(axis=0)
-    for j in range(4): # Iteration for the columns
-        for i in range(4): # Iteration for the rows
-            index = np.where(state[:,i,j] == 1)[0][0]
-            new_state[:,i,j] = three_chanel_scale[:,index]
-
-    return new_state[np.newaxis, :, :, :]
-
-def flat_reshape(state):
-    """
-    Function that reshapes the given array for a 3D convolution. (i.e. adds two axes, one for the channels and one for the batch siez)
-    :param state: numpy array representing the current state
-    :return: reshaped array
-    """
-    return state.reshape((1,state.shape[0]*state.shape[1]*state.shape[2]))
-
-
-"""
-Different neural nets to work with
-"""
-
-
-def init_flat_model():
-    """
-    Simple feed forward network
-    :return: compiled model
-    """
-    model = Sequential()
-    model.add(Dense(
-        1024,
-        activation='relu',
-        input_shape=(320,)
-    ))
-    model.add(Dense(
-        1024,
-        activation='relu'
-    ))
-    model.add(Dense(
-        4,
-        activation='linear'
-    ))
-
-    print(model.summary())
-
-    opt = Adam()
-    model.compile(loss='mse', optimizer=opt)
-
-    return model
-
-def init_conv_model_1(input_shape):
-    filter_size_1 = 32
-    state_input = Input((input_shape[0],input_shape[1],input_shape[2]))
-    row_conv_2 = Conv2D(filters = filter_size_1,
-                      kernel_size=(1,2),
-                      strides=(1,1),
-                      data_format="channels_first",
-                      activation="relu"
-                      )(state_input)
-    row_conv_3 = Conv2D(filters = filter_size_1,
-                      kernel_size=(1,2),
-                      strides=(1,1),
-                      data_format="channels_first",
-                      dilation_rate=(1,2),
-                      activation="relu"
-                      )(state_input)
-    row_conv_4 = Conv2D(filters = filter_size_1,
-                      kernel_size=(1,2),
-                      strides=(1,1),
-                      data_format="channels_first",
-                      dilation_rate=(1,3),
-                      activation="relu"
-                      )(state_input)
-    row_flat_2 = Flatten()(row_conv_2)
-    row_flat_3 = Flatten()(row_conv_3)
-    row_flat_4 = Flatten()(row_conv_4)
-
-    col_conv_2 = Conv2D(filters = filter_size_1,
-                      kernel_size=(2,1),
-                      strides=(1,1),
-                      data_format="channels_first",
-                      activation="relu"
-                      )(state_input)
-    col_conv_3 = Conv2D(filters = filter_size_1,
-                      kernel_size=(2,1),
-                      strides=(1,1),
-                      data_format="channels_first",
-                      dilation_rate=(2,1),
-                      activation="relu"
-                      )(state_input)
-    col_conv_4 = Conv2D(filters = filter_size_1,
-                      kernel_size=(2,1),
-                      strides=(1,1),
-                      data_format="channels_first",
-                      dilation_rate=(3,1),
-                      activation="relu"
-                      )(state_input)
-    col_flat_2 = Flatten()(col_conv_2)
-    col_flat_3 = Flatten()(col_conv_3)
-    col_flat_4 = Flatten()(col_conv_4)
-
-    output = concatenate([row_flat_2, row_flat_3, row_flat_4, col_flat_2, col_flat_3, col_flat_4])
-
-    output = Dense(1024,
-                   activation='relu',
-                   kernel_regularizer=l2(0.002)
-                   )(output)
-    output = Dense(1024,
-                   activation='relu',
-                   kernel_regularizer=l2(0.002)
-                   )(output)
-
-    output = Dense(4, activation='linear')(output)
-
-    model = Model(inputs=state_input, outputs=output)
-
-    print(model.summary())
-
-    opt = Adam()
-    model.compile(loss='mse', optimizer=opt)
-    return model
-
-
-def init_conv_model_2(input_shape):
-    filter_size_1 = 128
-    filter_size_2 = 128
-    state_input = Input((input_shape[0],input_shape[1],input_shape[2]))
-    permut_input = Permute((1,3,2),
-                           input_shape=(input_shape[0],input_shape[1],input_shape[2]))(state_input)
-
-    conv_2d = Conv2D(filters=filter_size_1,
-                     kernel_size=(4,1),
-                     strides=(4,1),
-                     data_format='channels_first',
-                     name='first_conv',
-                     input_shape=(input_shape[0],input_shape[1],input_shape[2]))
-    conv_1d = Conv2D(filters=filter_size_2,
-                     kernel_size=(1,1),
-                     strides=(1,1),
-                     data_format='channels_first',
-                     name='1x1_conv')
-
-    conv_1 = conv_2d(state_input)
-    conv_1 = conv_1d(conv_1)
-    conv_1 = Flatten()(conv_1)
-
-    conv_2 = conv_2d(permut_input)
-    conv_2 = conv_1d(conv_2)
-    conv_2 = Flatten()(conv_2)
-
-    output = concatenate([conv_1, conv_2])
-
-    output = Dense(1024,
-                   activation='relu'
-                   )(output)
-    output = Dense(4, activation='linear')(output)
-
-    model = Model(inputs=state_input, outputs=output)
-
-    print(model.summary())
-
-    opt = Adam()
-    model.compile(loss='mse', optimizer=opt)
-    return model
 
 
 """
@@ -246,14 +34,64 @@ def state_entropy(state):
             entropy += np.linalg.norm(state[:, j, i]-state[:, j + 1, i],2)
     return entropy/16
 
+def replay_to_matrix(reshape_function, model, list):
+    """
+    Calculates the target output from the replay variables
+    :param reshape_function: given reshape function
+    :param model: model in training
+    :param list: list of replay tuples
+    :return: X_train, Y_train
+    """
+    # input list of tuples: (game ,action, reward, new_game, running)
+    X_train, Y_train = [], []
+
+    for i in list:
+        # Calculate Q(s_i)
+        x = reshape_function(i[0])
+        qval = model.predict(x, batch_size=1)
+
+        # Calculate Q(s_{i+1})
+        newQ = model.predict(reshape_function(i[3]), batch_size=1)
+        maxQ = np.max(newQ)
+
+        # Calculate the target output
+        y = np.zeros((1, 4))
+        y[:] = qval[:]
+
+        # Update target value
+        # If the new state is not terminal and it made a valid move
+        if i[4] == True and ((i[0]==i[3]).sum() != game_shape[0]*game_shape[1]*game_shape[2]):
+            y[0][i[1]] = (i[2] + (gamma * maxQ))
+        else:
+            y[0][i[1]] = i[2]
+
+        # Append to X_train, Y_train
+        X_train.append(x)
+        Y_train.append(y)
+
+    # Concatenate the individual training and target variables
+    X_train = np.concatenate(X_train, axis=0)
+    Y_train = np.concatenate(Y_train, axis=0)
+
+    return X_train, Y_train
+
 def getReward(state, new_state, score, new_score, running):
+    """
+    Function that returns the reward given the state and action made.
+    :param state: s_i
+    :param new_state: s_{i+1}
+    :param score: score at time i
+    :param new_score: score at time i+1
+    :param running: boolean variable that is true if the game is still going
+    :return: reward value
+    """
     # if it makes a move that does not change the placement of the tiles
     if not running:
         return -20
     # If the game ended
     elif running and ((state==new_state).sum()==game_shape[0]*game_shape[1]*game_shape[2]):
         return -3
-    # Else if it made a valid move
+    # Else if it reached a new highest tile
     elif np.where(state==1)[0].max() < np.where(new_state==1)[0].max():
         return 2
     else:
@@ -263,18 +101,20 @@ def getReward(state, new_state, score, new_score, running):
 """
 Main training function
 """
-
 def training(epochs, gamma, model, reshape_function, epsilon=1):
     # Variables for storage during training
     replay = [] # Replay storeage
     train_scores = [] # Scores at the end of the training games
-    test_scores = [] # Scores at the end of the test games
+    test_scores_avg = [] # Average scores of the test episodes
+    test_scores_min = [] # Minimum scores of the test episodes
+    test_scores_max = [] # Maximum scores of the test episodes
+
 
     # Play one game with random weights
     print("First game after initialization...")
     test_play(model=model, reshape_function=reshape_function)
 
-    # Looping over the epochs number
+    # Looping over the epochs
     for epoch in range(epochs):
         print("Epcoh number: ", str(epoch+1))
         print("Epsilon value: ", str(epsilon))
@@ -282,10 +122,10 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
         # Initialize game
         game, score = initialize_game()
 
-        # Running variable for looping
+        # Play training game
         running = True
         while running:
-            # Evaluate on the current state
+            # Evaluate on the current state Q(s_i)
             qval = model.predict(reshape_function(game), batch_size=1)
 
             # Choose if the next action is random or not
@@ -300,41 +140,23 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
             # Observe Reward
             reward = getReward(game, new_game, score, new_score, running)
 
-            # Predict for the outcome state
-            newQ = model.predict(reshape_function(new_game), batch_size=1)
-            maxQ = np.max(newQ)
-
-            # Calculate the target output
-            y = np.zeros((1, 4))
-            y[:] = qval[:]
-
-            # Calculate update value
-            if running == True and ((game==new_game).sum() != game_shape[0]*game_shape[1]*game_shape[2]):  # non-terminal state and not an invalid move
-                update = (reward + (gamma * maxQ))
-            else:  # terminal state
-                update = reward
-            # target output
-            y[0][action] = update
-
             # Experience replay storage
             if (len(replay) < buffer):  # if buffer not filled, add to it
-                replay.append((game, y))
-            else:
-                # Choose random from the replay list
+                replay.append((game ,action, reward, new_game, running))
+            else: #Train
+                # Choose randomly from the replay list
                 indicies = np.random.choice(buffer, batch_size)
-                X_train, Y_train = [], []
+                replay_list = []
 
                 # Append chosen entries
                 for i in indicies:
-                    X_train.append(reshape_function(replay[i][0]))
-                    Y_train.append(replay[i][1])
+                    replay_list.append(replay[i])
 
                 # Remove used entries
                 replay = [i for j, i in enumerate(replay) if j not in indicies]
 
-                # Concatenate the training data into one matrix
-                X_train = np.concatenate(X_train,axis=0)
-                Y_train = np.concatenate(Y_train,axis=0)
+                # Transform the replay list into trainable matrices
+                X_train, Y_train = replay_to_matrix(reshape_function, model, replay_list)
 
                 # Train model on X_train, Y_train
                 model.fit(X_train, Y_train, batch_size=batch_size, epochs=1, verbose=1)
@@ -351,36 +173,37 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
         if epsilon > 0.1:
             epsilon -= (1 / epochs)
 
-        # If one test_num games have passed play a test game
+        # If test_num games have passed play test games
         if (epoch % (epochs//test_num)) == 0:
             print("Current epsilon value: ", str(epsilon))
             # Test play
             score_list = avg_test_plays(20, model=model, reshape_function=reshape_function)
             print("Average, min and max of the test scores: ", np.mean(score_list), min(score_list), max(score_list))
-            test_scores += [np.mean(score_list)] # Store test score
-            print("Maximum average score after Game %s: " % (epoch + 1,), str(max(test_scores)))
+            # Store test statistics
+            test_scores_avg += [np.mean(score_list)]
+            test_scores_min += [min(score_list)]
+            test_scores_max += [max(score_list)]
+            print("Maximum average score after Game %s: " % (epoch + 1,), str(max(test_scores_avg)))
 
     # Train on the remaining samples in the replay list
     print("Train on the remaining samples")
-    X_train, Y_train = [], []
 
-    # Append chosen entries
-    for i in range(len(replay)):
-        X_train.append(reshape_function(replay[i][0]))
-        Y_train.append(replay[i][1])
-    X_train = np.concatenate(X_train, axis=0)
-    Y_train = np.concatenate(Y_train, axis=0)
+    # Reshape remaining replay data
+    X_train, Y_train = replay_to_matrix(reshape_function, model, replay)
 
     # Fit the model on data
-    model.fit(X_train, Y_train, batch_size=batch_size, epochs=1, verbose=1)
+    model.fit(X_train, Y_train, batch_size=batch_size//5, epochs=1, verbose=1)
 
     # Test play after last train
     score_list, _ = test_play(model=model, reshape_function=reshape_function)
-    print("Maximum score after Game %s: " % (epoch + 1,), str(max(test_scores)))
-    return train_scores, test_scores
+    print("Maximum average score after Game %s: " % (epoch + 1,), str(max(test_scores_avg)))
 
 
-# Choose reshape function based on reshape_type
+    return train_scores, test_scores_avg, test_scores_min, test_scores_max, model
+
+
+
+# Choose reshape function and game_shape_after_reshaping based on reshape_type
 if reshape_type == 'onehot':
     reshape_function = reshape_state
     game_shape_after_reshaping = (20, 4, 4)
@@ -400,14 +223,40 @@ if reshape_type in ['onehot', 'linear', 'trig']:
 else:
     model = init_flat_model()
 
+
 # Run training on model and reshape function
-train_scores, test_scores = training(epochs, gamma, model, reshape_function)
+train_scores, test_scores_avg, test_score_min, test_score_max, model = training(epochs, gamma, model, reshape_function)
 
 
+# Write out the generated data and the statistics into the hdf5 file given as the output path
+# name is given as the training timestamp
+name = datetime.datetime.fromtimestamp(
+    int(time.time())
+).strftime('%Y-%m-%d_%H:%M:%S')
+with h5py.File(output_path, 'a') as f:
+    f[name] = train_scores
+    f[name].attrs['test_scores_avg'] = test_scores_avg
+    f[name].attrs['test_score_min'] = test_score_min
+    f[name].attrs['test_score_max'] = test_score_max
+    f[name].attrs['gamma'] = gamma
+    f[name].attrs['batch_size'] = batch_size
+    f[name].attrs['buffer'] = buffer
+    f[name].attrs['epochs_num'] = epochs
+    f[name].attrs['reshape_type'] = reshape_type
+    f[name].attrs['test_num'] = test_num
+
+
+# Save trained model
+model.save("model_"+name+".hdf5")
+
+
+
+"""
 # Plot the train_scores and test_scores and save it in a .png file
 plt.plot(range(1, epochs+1), train_scores, label='Train scores')
 plt.plot(list(range(1, epochs+1, epochs//test_num)), test_scores, label='Test scores averages')
 plt.legend(loc='upper left')
 plt.title("Training on "+str(epochs)+" games")
 
-plt.savefig(plot_path)
+plt.savefig(output_path)
+"""

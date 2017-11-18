@@ -1,5 +1,6 @@
 """
 Functions to play 2048
+The game stores current state as a numpy array and the score as an integer
 """
 
 import numpy as np
@@ -9,7 +10,7 @@ game_shape = (20,4,4)
 def visualize_state(state, score):
     """
     Visualize the current given state
-    :param state: current state of the game
+    :param state: 20x4x4 numpy array
     :return: None
     """
     print("Current score: ",str(score))
@@ -26,8 +27,8 @@ def visualize_state(state, score):
 def add_tile(state):
     """
     Funtion that adds a tile randomly to the given state
-    :param state: current state of the game
-    :return: new state of the game with the added tile
+    :param state: 20x4x4 numpy array
+    :return: 20x4x4 numpy array
     """
     # sum of the array along the first array, if 0 it is empty if 1 it has a number in it
     used_tiles = state[1:,:,:].sum(axis=0)
@@ -48,9 +49,9 @@ def add_tile(state):
 def initialize_game():
     """
     This function initialize a 4x4 game with two randomly added tile
-    :return: 20X4X4 array of the current state, score integer: 0
+    :return: 20X4X4 numpy array, score: 0
     """
-    # empty game grid, only 1 in the first layer
+    # empty game grid, only 1s in the first layer
     state = np.zeros((game_shape[0],game_shape[1],game_shape[2]), dtype=np.int8)
     state[0, :, :] = 1
     # add two tile randomly
@@ -60,9 +61,9 @@ def initialize_game():
 
 def shift_row(row, score):
     """
-    Function that makes a move on the given row
-    :param row: 20x4 numpy array that represents a row
-    :return: row_updated
+    Function that makes a move on the given row.
+    :param row: 20x4 numpy array
+    :return: 20x4 updated numpy array
     """
     # new array to store the changed row and score
     row_updated = row.copy()
@@ -70,11 +71,11 @@ def shift_row(row, score):
 
     # Sums up the first axis
     row_sum = row_updated.sum(axis=0)
-    # If there is no entry in the row:
+    # If there is no entry in the row return it
     if row_sum.sum() == 0:
         return row_updated, score_updated
     # If there is at least one entry continue
-    # Shift the entries
+    # Shift the entries (drop the empty columns and add them to the end)
     columns_to_drop = []
     for i in range(4):
         # If there is no value in the entry delete that
@@ -94,7 +95,7 @@ def shift_row(row, score):
                 temp_row[i - 1, j] = 0
                 temp_row[i - 1, j + 1] = 0
                 row_updated[i-1,j+1] = 0 # Avoid to merge 3 similar into two new tiles
-                score_updated += 2**(i+1)
+                score_updated += 2**(i+1) # Update scores
     row_updated = temp_row # update row_update variable
 
     # Shift again to fill the holes made by merging
@@ -115,13 +116,13 @@ def action_move(state, score, move, end_check = True):
     """
     Function to make the given move, add a new tile, update the score value and return continuing = False if there is no possible further move
     move: 0 - up, 1 - right, 2 - down, 3 - left
-    :param state: current state, score: current score,move: move to make on the state
+    :param state: 20x4x4 array, score: current score, move: move to make on the state
     :return: state, score, running
     """
     assert move in [0,1,2,3]
     # Copy the state in order to keep the move from immediately change the state of the game
     new_state = state.copy()
-    # Cut down the first layer
+    # Cut down the first layer which represents the empty tiles
     new_state = new_state[1:, :, :]
     # Copy the original score so it won't update it automatically the original variable
     new_score = score
@@ -144,7 +145,7 @@ def action_move(state, score, move, end_check = True):
             new_state[:, i, :], new_score = shift_row(new_state[:, i, ::-1], new_score)
             new_state[:,i,:] = new_state[:,i,::-1]
 
-    # Add back the first layer to represent non-used tiles
+    # Add back the first layer to represent empty tiles
     first_layer = np.ones((1, 4, 4))
     first_layer = first_layer - new_state.sum(axis=0)[np.newaxis, :, :]
     new_state = np.concatenate([first_layer, new_state], axis=0)
@@ -182,21 +183,24 @@ def test_play(model = None, reshape_function = None, visualize=True):
     game_list = [game]
     # Play the game based on the neural network
     while running:
+        # If model is given made move based on it, otherwise randomly
         if model != None:
             qval = model.predict(reshape_function(game), batch_size=1)
             action = np.argmax(qval)
         else:
             action = np.random.randint(0, 4)
+        # Make move
         game, score, running = action_move(game, score, action)
         score_list += [score]
         game_list += [game]
+        # if visualize is given, then print state after each move
         if visualize:
             if model == None:
                 print(action)
             else:
                 print(qval)
             visualize_state(game, score)
-        # If it traps into a pit where it makes the same move over and over it terminates the game
+        # If it traps into a pit where it makes the same move over and over it terminates the game (no change for 20 moves)
         if score_list[-20:] == [score]*20:
             if visualize:
                 print("Not good enough, trapped")
@@ -205,6 +209,13 @@ def test_play(model = None, reshape_function = None, visualize=True):
 
 
 def avg_test_plays(plays_num, model=None ,reshape_function=None):
+    """
+    Plays the given number of plays and returns statistics based on them.
+    :param plays_num: integer, number of plays to play
+    :param model: network to play based on, if none it plays randomly
+    :param reshape_function: reshape function that works with the model
+    :return: list of scores
+    """
     list_of_scores = []
     for i in range(plays_num):
         scores, _ = test_play(model, reshape_function, visualize=False)

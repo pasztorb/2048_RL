@@ -1,47 +1,40 @@
-import numpy as np
 import sys
+import h5py
+import time
+import datetime
+
 from game import *
 from embedding_2048 import *
+from reshape_and_NN import reshape_state
 
 from keras.models import Model
 from keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, Input, concatenate
 from keras.optimizers import Adam, SGD, RMSprop
+from keras.layers.core import Permute
 from keras.regularizers import l2
 
-import matplotlib.pyplot as plt
-
-# Command line given variables
+# Variables given in command lines
 epochs = int(sys.argv[1])
-reshape_type = sys.argv[2]
-assert reshape_type in ['onehot', 'linear', 'trig']
-plot_path = sys.argv[3]
+embedding_size = int(sys.argv[2])
+output_path = sys.argv[3]
 
 # Fixed variables
 gamma = 0.9
 epsilon = 1
-batch_size = 60
-buffer = 600
+batch_size = 300
+buffer = 1000
 test_num = 50
 game_shape = (20, 4, 4)
-embedding_size = 8
-pre_train_games = 1000
 
-
-def reshape_state(state):
-    """
-    Function that reshapes the given array for a 3D convolution. (i.e. adds two axes, one for the channels and one for the batch siez)
-    :param state: numpy array representing the current state
-    :return: reshaped array
-    """
-    return state[np.newaxis, :, :, :]
-
+pre_train_games = 100
 
 """
-Different neural nets to work with
+Implementation of the Convolutional network
 """
 
 def init_model(input_shape, embed_model):
-    filter_size_1 = 16
+    filter_size_1 = 128
+    filter_size_2 = 128
     # Input
     state_input = Input((input_shape[0],input_shape[1],input_shape[2]))
     # Embedding convolution
@@ -56,106 +49,124 @@ def init_model(input_shape, embed_model):
     embed_conv.set_weights(embedding_weights)
     embed_input = embed_conv(state_input)
 
-    # Convolution along the rows
-    row_conv_2 = Conv2D(filters = filter_size_1,
-                      kernel_size=(1,2),
-                      strides=(1,1),
-                      data_format="channels_first",
-                      activation="relu"
-                      )(embed_input)
-    row_conv_3 = Conv2D(filters = filter_size_1,
-                      kernel_size=(1,2),
-                      strides=(1,1),
-                      data_format="channels_first",
-                      dilation_rate=(1,2),
-                      activation="relu"
-                      )(embed_input)
-    row_conv_4 = Conv2D(filters = filter_size_1,
-                      kernel_size=(1,2),
-                      strides=(1,1),
-                      data_format="channels_first",
-                      dilation_rate=(1,3),
-                      activation="relu"
-                      )(embed_input)
-    row_flat_2 = Flatten()(row_conv_2)
-    row_flat_3 = Flatten()(row_conv_3)
-    row_flat_4 = Flatten()(row_conv_4)
+    # Switch row and column axis
+    permut_input = Permute((1,3,2),
+                           input_shape=(input_shape[0],input_shape[1],input_shape[2]))(embed_input)
 
-    # Convoltuion along the columns
-    col_conv_2 = Conv2D(filters = filter_size_1,
-                      kernel_size=(2,1),
-                      strides=(1,1),
-                      data_format="channels_first",
-                      activation="relu"
-                      )(embed_input)
-    col_conv_3 = Conv2D(filters = filter_size_1,
-                      kernel_size=(2,1),
-                      strides=(1,1),
-                      data_format="channels_first",
-                      dilation_rate=(2,1),
-                      activation="relu"
-                      )(embed_input)
-    col_conv_4 = Conv2D(filters = filter_size_1,
-                      kernel_size=(2,1),
-                      strides=(1,1),
-                      data_format="channels_first",
-                      dilation_rate=(3,1),
-                      activation="relu"
-                      )(embed_input)
-    col_flat_2 = Flatten()(col_conv_2)
-    col_flat_3 = Flatten()(col_conv_3)
-    col_flat_4 = Flatten()(col_conv_4)
+    conv_2d = Conv2D(filters=filter_size_1,
+                     kernel_size=(4,1),
+                     strides=(4,1),
+                     data_format='channels_first',
+                     name='first_conv',
+                     input_shape=(input_shape[0],input_shape[1],input_shape[2]))
+    conv_1d = Conv2D(filters=filter_size_2,
+                     kernel_size=(1,1),
+                     strides=(1,1),
+                     data_format='channels_first',
+                     name='1x1_conv')
 
-    # Concatenate the outputs
-    output = concatenate([row_flat_2, row_flat_3, row_flat_4, col_flat_2, col_flat_3, col_flat_4])
+    conv_1 = conv_2d(embed_input)
+    conv_1 = conv_1d(conv_1)
+    conv_1 = Flatten()(conv_1)
 
-    # Dense Layers
-    output = Dense(512,
-                   activation='relu',
-                   kernel_regularizer=l2(0.002)
+    conv_2 = conv_2d(permut_input)
+    conv_2 = conv_1d(conv_2)
+    conv_2 = Flatten()(conv_2)
+
+    output = concatenate([conv_1, conv_2])
+
+    output = Dense(1024,
+                   activation='relu'
                    )(output)
-    output = Dense(512,
-                   activation='relu',
-                   kernel_regularizer=l2(0.002)
-                   )(output)
-
-    # Output layer
     output = Dense(4, activation='linear')(output)
 
     model = Model(inputs=state_input, outputs=output)
 
     print(model.summary())
 
-    opt = RMSprop()
+    opt = Adam()
     model.compile(loss='mse', optimizer=opt)
+
     return model
 
 
-"""
-Reward function
-"""
+def replay_to_matrix(reshape_function, model, list):
+    """
+    Calculates the target output from the replay variables
+    :param reshape_function: given reshape function
+    :param model: model in training
+    :param list: list of replay tuples
+    :return: X_train, Y_train
+    """
+    # input list of tuples: (game ,action, reward, new_game, running)
+    X_train, Y_train = [], []
+
+    for i in list:
+        # Calculate Q(s_i)
+        x = reshape_function(i[0])
+        qval = model.predict(x, batch_size=1)
+
+        # Calculate Q(s_{i+1})
+        newQ = model.predict(reshape_function(i[3]), batch_size=1)
+        maxQ = np.max(newQ)
+
+        # Calculate the target output
+        y = np.zeros((1, 4))
+        y[:] = qval[:]
+
+        # Update target value
+        # If the new state is not terminal and it made a valid move
+        if i[4] == True and ((i[0]==i[3]).sum() != game_shape[0]*game_shape[1]*game_shape[2]):
+            y[0][i[1]] = (i[2] + (gamma * maxQ))
+        else:
+            y[0][i[1]] = i[2]
+
+        # Append to X_train, Y_train
+        X_train.append(x)
+        Y_train.append(y)
+
+    # Concatenate the individual training and target variables
+    X_train = np.concatenate(X_train, axis=0)
+    Y_train = np.concatenate(Y_train, axis=0)
+
+    return X_train, Y_train
+
 
 def getReward(state, new_state, score, new_score, running):
+    """
+    Function that returns the reward given the state and action made.
+    :param state: s_i
+    :param new_state: s_{i+1}
+    :param score: score at time i
+    :param new_score: score at time i+1
+    :param running: boolean variable that is true if the game is still going
+    :return: reward value
+    """
     # if it makes a move that does not change the placement of the tiles
-    if running and ((state==new_state).sum()==game_shape[0]*game_shape[1]*game_shape[2]):
-        return -10
+    if not running:
+        return -20
     # If the game ended
-    elif not running:
-        return -50
+    elif running and ((state==new_state).sum()==game_shape[0]*game_shape[1]*game_shape[2]):
+        return -3
+    # Else if it reached a new highest tile
+    elif np.where(state==1)[0].max() < np.where(new_state==1)[0].max():
+        return 2
     else:
-        return 3
+        return 1
 
 
 """
 Main training function
 """
-
-def training(epochs, gamma, model, reshape_function, X_embedding, Y_embedding, epsilon=1):
+def training(epochs, gamma, model, embed_model, reshape_function, X_embedding, Y_embedding, epsilon=1):
     # Variables for storage during training
     replay = [] # List for replay storeage
     train_scores = []
-    test_scores = []
     train_games = []
+
+    test_scores_avg = [] # Average scores of the test episodes
+    test_scores_min = [] # Minimum scores of the test episodes
+    test_scores_max = [] # Maximum scores of the test episodes
 
     # Lists to store game states for embedding
     X_embed = X_embedding
@@ -163,7 +174,7 @@ def training(epochs, gamma, model, reshape_function, X_embedding, Y_embedding, e
 
     # Play one game with random weights
     print("First game after initialization...")
-    test_play(model=model, reshape_function=reshape_function)
+    _, _ = test_play(model=model, reshape_function=reshape_function)
 
     # Looping over the epochs number
     for epoch in range(epochs):
@@ -176,8 +187,7 @@ def training(epochs, gamma, model, reshape_function, X_embedding, Y_embedding, e
         # Variable to keep in charge the running
         running = True
         while running:
-
-            # Evaluate on the current state
+            # Evaluate on the current state Q(s_i)
             qval = model.predict(reshape_function(game), batch_size=1)
 
             # Choose if the action is random or not
@@ -192,39 +202,23 @@ def training(epochs, gamma, model, reshape_function, X_embedding, Y_embedding, e
             # Observe Reward
             reward = getReward(game, new_game, score, new_score, running)
 
-            # Predict for the outcome state
-            newQ = model.predict(reshape_function(new_game), batch_size=1)
-            maxQ = np.max(newQ)
-
-            # Calculate the target output
-            y = np.zeros((1, 4))
-            y[:] = qval[:]
-            if running == True and reward != -3:  # non-terminal state and not an invalid move
-                update = (reward + (gamma * maxQ))
-            else:  # terminal state
-                update = reward
-            # target output
-            y[0][action] = update
-
             # Experience replay storage
             if (len(replay) < buffer):  # if buffer not filled, add to it
-                replay.append((game, y))
-            else:
-                # Choose random from the replay list
+                replay.append((game, action, reward, new_game, running))
+            else:  # Train
+                # Choose randomly from the replay list
                 indicies = np.random.choice(buffer, batch_size)
-                X_train, Y_train = [], []
+                replay_list = []
 
                 # Append chosen entries
                 for i in indicies:
-                    X_train.append(reshape_function(replay[i][0]))
-                    Y_train.append(replay[i][1])
+                    replay_list.append(replay[i])
 
                 # Remove used entries
                 replay = [i for j, i in enumerate(replay) if j not in indicies]
 
-                # Concatenate the training data into one matrix
-                X_train = np.concatenate(X_train,axis=0)
-                Y_train = np.concatenate(Y_train,axis=0)
+                # Transform the replay list into trainable matrices
+                X_train, Y_train = replay_to_matrix(reshape_function, model, replay_list)
 
                 # Train model on X_train, Y_train
                 model.fit(X_train, Y_train, batch_size=batch_size, epochs=1, verbose=1)
@@ -246,58 +240,79 @@ def training(epochs, gamma, model, reshape_function, X_embedding, Y_embedding, e
         if epsilon > 0.1:
             epsilon -= (1 / epochs)
 
-        # If one hundredth of the game has passed play a test game
+        # If test_num games have passed play test games
         # Add update embedding
-        if (epoch % (epochs//test_num)) == 0:
+        if (epoch % (epochs // test_num)) == 0:
             print("Current epsilon value: ", str(epsilon))
-
             # Test play
-            score_list = avg_test_plays(10, model=model, reshape_function=reshape_function)
-            print("Average, min and max of the test scores: ", np.mean(score_list), min(score_list), max(score_list))
-            test_scores += [np.mean(score_list)] # Store test score
-            print("Maximum average score after Game %s: " % (epoch + 1,), str(max(test_scores)))
+            score_list = avg_test_plays(20, model=model, reshape_function=reshape_function)
+            print("Average, min and max of the test scores: ", np.mean(score_list), min(score_list),
+                  max(score_list))
+            # Store test statistics
+            test_scores_avg += [np.mean(score_list)]
+            test_scores_min += [min(score_list)]
+            test_scores_max += [max(score_list)]
+            print("Maximum average score after Game %s: " % (epoch + 1,), str(max(test_scores_avg)))
 
             # Update embedding
+            #Todo: only transform games that are not yet appended to X_embed, Y_embed
             X_embed_new, Y_embed_new = games_to_trainable(train_games)
-            # Drop some entries from the previous game and add the new embeddings
+            # Add the new embeddings to the already existing ones
+            X_embed[0] += X_embed_new[0]
+            X_embed[1] += X_embed_new[1]
+            for i in range(len(Y_embed)):
+                Y_embed[i] += Y_embed_new[i]
 
             # Train embeddings model
+            embed_model = train_embed_model(embed_model, X_embed, Y_embed)
 
-            # Update weight of model
+            # Update weight of embedding layer
+            model.get_layer(name='embed_conv').set_weights(embed_model.get_layer(name='embed_conv').get_weights())
 
 
     # Train on the remaining samples in the replay list
     print("Train on the remaining samples")
-    X_train, Y_train = [], []
 
-    # Append chosen entries
-    for i in range(len(replay)):
-        X_train.append(reshape_function(replay[i][0]))
-        Y_train.append(replay[i][1])
-    X_train = np.concatenate(X_train, axis=0)
-    Y_train = np.concatenate(Y_train, axis=0)
+    # Reshape remaining replay data
+    X_train, Y_train = replay_to_matrix(reshape_function, model, replay)
 
     # Fit the model on data
-    model.fit(X_train, Y_train, batch_size=batch_size, epochs=1, verbose=1)
+    model.fit(X_train, Y_train, batch_size=batch_size//5, epochs=1, verbose=1)
 
     # Test play after last train
     score_list, _ = test_play(model=model, reshape_function=reshape_function)
-    print("Maximum score after Game %s: " % (epoch + 1,), str(max(test_scores)))
-    return train_scores, test_scores
+    print("Maximum average score after Game %s: " % (epoch + 1,), str(max(test_scores_avg)))
+
+    return train_scores, test_scores_avg, test_scores_min, test_scores_max, model
 
 
 # Initialize embedding model
-embed_model, X_embed, Y_embed = init_and_pretrain_embed_model(embedding_size, pre_train_games)
+embed_model, X_embedding, Y_embedding = init_and_pretrain_embed_model(embedding_size, pre_train_games)
 
 # Initialize model
 model = init_model(game_shape, embed_model)
 
 # Run training on model and reshape function
-train_scores, test_scores = training(epochs, gamma, model, reshape_state, X_embed, Y_embed)
+train_scores, test_scores_avg, test_score_min, test_score_max, model = training(epochs, gamma, model, embed_model, reshape_state, X_embedding, Y_embedding)
+
+# Write out the generated data and the statistics into the hdf5 file given as the output path
+# name is given as the training timestamp
+name = datetime.datetime.fromtimestamp(
+    int(time.time())
+).strftime('%Y-%m-%d_%H:%M:%S')
+with h5py.File(output_path, 'a') as f:
+    f[name] = train_scores
+    f[name].attrs['test_scores_avg'] = test_scores_avg
+    f[name].attrs['test_score_min'] = test_score_min
+    f[name].attrs['test_score_max'] = test_score_max
+    f[name].attrs['gamma'] = gamma
+    f[name].attrs['batch_size'] = batch_size
+    f[name].attrs['buffer'] = buffer
+    f[name].attrs['epochs_num'] = epochs
+    f[name].attrs['test_num'] = test_num
+    f[name].attrs['embedding_size'] = embedding_size
+    f[name].attrs['pre_train_num'] = pre_train_games
 
 
-# Plot the train_scores and test_scores and save it in a .png file
-plt.plot(range(1, epochs+1), train_scores, label='Train scores')
-plt.plot(list(range(1, epochs+1, epochs//test_num)), test_scores, label='Test scores averages')
-plt.legend(loc='upper left')
-plt.savefig(plot_path)
+# Save trained model
+model.save("model_"+name+".hdf5")
