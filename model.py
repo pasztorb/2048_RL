@@ -247,7 +247,7 @@ with h5py.File(output_path, 'a') as f:
 
 
 # Save trained model
-model.save("model_"+name+".hdf5")
+model.save(reshape_type+"_model_"+name+".hdf5")
 
 
 
