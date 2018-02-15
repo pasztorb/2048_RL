@@ -15,7 +15,7 @@ def initial_random_plays(num_plays):
     """
     list_of_states = []
     for i in range(num_plays):
-        scores, states = test_play(visualize=False)
+        _, states = test_play(visualize=False)
         list_of_states += [states]
 
     return list_of_states

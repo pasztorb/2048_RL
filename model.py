@@ -34,12 +34,14 @@ def state_entropy(state):
             entropy += np.linalg.norm(state[:, j, i]-state[:, j + 1, i],2)
     return entropy/16
 
-def replay_to_matrix(reshape_function, model, list):
+
+def replay_to_matrix(reshape_function, model, list, gamma):
     """
     Calculates the target output from the replay variables
     :param reshape_function: given reshape function
     :param model: model in training
     :param list: list of replay tuples
+    :param gamma: The discount factor
     :return: X_train, Y_train
     """
     # input list of tuples: (game ,action, reward, new_game, running)
@@ -156,7 +158,7 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
                 replay = [i for j, i in enumerate(replay) if j not in indicies]
 
                 # Transform the replay list into trainable matrices
-                X_train, Y_train = replay_to_matrix(reshape_function, model, replay_list)
+                X_train, Y_train = replay_to_matrix(reshape_function, model, replay_list, gamma)
 
                 # Train model on X_train, Y_train
                 model.fit(X_train, Y_train, batch_size=batch_size, epochs=1, verbose=1)
@@ -189,7 +191,7 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
     print("Train on the remaining samples")
 
     # Reshape remaining replay data
-    X_train, Y_train = replay_to_matrix(reshape_function, model, replay)
+    X_train, Y_train = replay_to_matrix(reshape_function, model, replay, gamma)
 
     # Fit the model on data
     model.fit(X_train, Y_train, batch_size=batch_size//5, epochs=1, verbose=1)

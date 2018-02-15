@@ -23,7 +23,8 @@ def reshape_state(state):
 
 def linear_reshape(state):
     """
-    Reshapes the state variable as a 1x4x4 matrix where each tile is represented as number between 0 and 1. The higher value tiles are represented by larger numbers.
+    Reshapes the state variable as a 1x4x4 matrix where each tile is represented as number between 0 and 1.
+    The higher value tiles are represented by larger numbers.
     :param state: 20x4x4 numpy array
     :return: 1x1x4x4 numpy array
     """
@@ -112,9 +113,11 @@ def init_flat_model():
 
     return model
 
+
 def init_conv_model_1(input_shape):
     """
-    2D Convolutional network that makes convolutions row and columns wise then flattens and concatenate them, and adds dense layers.
+    2D Convolutional network that makes convolutions row and columns wise then flattens and concatenate them,
+    and adds dense layers.
     :param input_shape: tuple of length 3 that sets the dimensions of the expected input
     :return: compiled model
     """
@@ -192,7 +195,8 @@ def init_conv_model_1(input_shape):
 
 def init_conv_model_2(input_shape):
     """
-    2D Convolutional network that makes convolution row and columns wise with shared weights. Then flatten, concatenate them and add dense layers.
+    2D Convolutional network that makes convolution row and columns wise with shared weights.
+    Then flatten, concatenate them and add dense layers.
     :param input_shape: tuple of length 3 that sets the dimensions of the expected input
     :return: compiled model
     """
