@@ -8,7 +8,5 @@
 #SBATCH --mail-user:pasztorb@me.com
 
 # running
-module purge
 module load keras/2.1.4
-
 python3 model.py 1000 onehot server_try_onehot.hdf5
