@@ -8,6 +8,7 @@ from game import *
 from reshape_and_NN import *
 
 # Variables given in command lines
+# Sample call: python3 model.py 1000 onehot output_file.hdf5
 epochs = int(sys.argv[1])
 reshape_type = sys.argv[2]
 assert reshape_type in ['onehot', 'linear', 'trig', 'flat']
@@ -169,7 +170,7 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
 
         # Store and print score at the end of the training game
         train_scores += [score]
-        print("Score at the end of the training game: ", str(score))
+        print("Score at the end of the training game %s: " % (epoch + 1,), str(score))
 
         # Reduce epsilon value after game finished
         if epsilon > 0.1:
@@ -177,6 +178,7 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
 
         # If test_num games have passed play test games
         if (epoch % (epochs//test_num)) == 0:
+            print("Running test plays...")
             print("Current epsilon value: ", str(epsilon))
             # Test play
             score_list = avg_test_plays(20, model=model, reshape_function=reshape_function)
