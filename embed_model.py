@@ -1,4 +1,5 @@
 import sys
+import os
 import h5py
 import time
 import datetime
@@ -16,7 +17,7 @@ from keras.regularizers import l2
 # Variables given in command lines
 epochs = int(sys.argv[1])
 embedding_size = int(sys.argv[2])
-output_path = sys.argv[3]
+output_folder = sys.argv[3]
 
 # Fixed variables
 gamma = 0.9
@@ -29,6 +30,12 @@ game_shape = (20, 4, 4)
 pre_train_games = 100
 
 """
+Initialize a folder in which the training plots, game states and the model will be stored
+"""
+output_folder = "/"+output_folder
+os.mkdir(output_folder)
+
+"""
 Implementation of the Convolutional network
 """
 
@@ -39,7 +46,7 @@ def init_model(input_shape, embed_model):
     state_input = Input((input_shape[0],input_shape[1],input_shape[2]))
     # Embedding convolution
     embedding_weights = embed_model.get_layer(name='embed_conv').get_weights()
-    embed_conv = Conv2D(filters = embedding_size,
+    embed_conv = Conv2D(filters = embedding_weights[0].shape[-1],
                         kernel_size = (1, 1),
                         strides = (1, 1),
                         use_bias = False,
@@ -300,7 +307,7 @@ train_scores, test_scores_avg, test_score_min, test_score_max, model = training(
 name = datetime.datetime.fromtimestamp(
     int(time.time())
 ).strftime('%Y-%m-%d_%H:%M:%S')
-with h5py.File(output_path, 'a') as f:
+with h5py.File(output_folder+"training.hdf5", 'a') as f:
     f[name] = train_scores
     f[name].attrs['test_scores_avg'] = test_scores_avg
     f[name].attrs['test_score_min'] = test_score_min
@@ -315,4 +322,4 @@ with h5py.File(output_path, 'a') as f:
 
 
 # Save trained model
-model.save("model_"+name+".hdf5")
+model.save(output_folder+"model_"+name+".hdf5")

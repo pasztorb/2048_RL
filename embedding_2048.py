@@ -1,31 +1,48 @@
 from game import *
 import sys
+import h5py
 
 from keras.models import Model
 from keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, Input, concatenate
 from keras.optimizers import Adam, SGD, RMSprop
 from keras.callbacks import EarlyStopping
 
+from sklearn.manifold import TSNE
+import matplotlib.pyplot as plt
 
-def initial_random_plays(num_plays):
+
+def random_plays(num_plays, output_folder):
     """
-    This function randomly plays num_plays number of games. Saves the states in all games and return a nested list with the states for all games.
+    This function randomly plays num_plays number of games.
+    Saves the states in all games and add them to the games.hdf5 file in the output folder.
     :param num_plays: integer variable to give how many random games to play
-    :return: nested list of states of games
+    :param output_folder: path indicating the folder in which the games.hdf5 can be found
+    :return: Adds to the hdf5 file as a (None,20,4,4) array
     """
-    list_of_states = []
-    for i in range(num_plays):
-        _, states = test_play(visualize=False)
-        list_of_states += [states]
+    with h5py.File(output_folder + "games.hdf5", 'a') as f:
+        # Finds the games directory in the hdf5 file. If it does not exists makes one and adds the new_games attribute
+        try:
+            games_dir = f['games']
+        except:
+            games_dir = f.create_group('games')
+        # Play the given number of games
+        for i in range(num_plays):
+            # Plays a random game
+            _, states = test_play(visualize=False)
+            states = np.array(states)
+            # Counts the number of games already in the folder
+            num_games = len(list(games_dir.keys()))
+            # Names the new game as the next one
+            name = 'game'+str(num_games)
+            # Add the game into the hdf5
+            games_dir[name] = states
 
-    return list_of_states
 
-
-def games_to_trainable(list_of_games):
+def games_to_trainable(folder):
     """
     This function takes a list of games and turn it into a trainable format
-    :param list_of_games: nested list of games
-    :return: X, Y (two lists required to train the embedding model)
+    :param folder: Folder in which the games.hdf5 can be found.
+    :return: Appends the X_train and Y_train to the given datasets in the hdf5 file
     """
     # Extract the lists from the games
     X_train = [[],[]]
@@ -33,19 +50,47 @@ def games_to_trainable(list_of_games):
 
     # At each step add the current state to the X_train list's first list and the current state+2 to the second list
     # At each step add the current state + 1 into the Y_train list reshaped to (20,16), i.e. each column represent one tile vector
-    for game in list_of_games:
-        for g in range(len(game)-2):
-            X_train[0].append(game[g])
-            X_train[1].append(game[g+2])
-            Y_train.append(game[g].reshape((20,16)))
+    # First extracts the games_dir from the hdf5 file
+    with h5py.File(folder + "games.hdf5", 'a') as f:
+        games_dir = f['games']
 
-    # Make one array from the several arrays
-    X_train = [np.array(x) for x in X_train]
-    Y_train = np.array(Y_train)
-    # Split the Y_train array into 16 different lists for the different columns
-    Y_train = [Y_train[:, :, i] for i in range(16)]
+        # For each (except the first and the last) game it appends the previous and the next game states to X_train the the current to Y_train
+        for name in games_dir:
+            # current game
+            game = games_dir[name]
+            # Add the states/rows to the related datasets
+            for g in range(game.shape[0]-2):
+                X_train[0].append(game[g,:,:,:])
+                X_train[1].append(game[g+2,:,:,:])
+                Y_train.append(game[g,:,:,:].reshape((20,16)))
 
-    return X_train, Y_train
+        # Remove the games group and add a new empty
+        del f['games']
+        f.create_group('games')
+
+        # Make one array from the several arrays
+        X_train = [np.array(x) for x in X_train]
+        Y_train = np.array(Y_train)
+        # Split the Y_train array into 16 different lists for the different columns
+        Y_train = [Y_train[:, :, i] for i in range(16)]
+
+        # If training datasets are already exists append to them, if not create the datasets
+        if 'X_train_0' in f:
+            f['X_train_0'].resize(f['X_train_0'].shape[0]+X_train[0].shape[0], axis=0)
+            f['X_train_0'][-X_train[0].shape[0]: , :, :, :] = X_train[0]
+
+            f['X_train_1'].resize(f['X_train_1'].shape[0] + X_train[1].shape[0], axis=0)
+            f['X_train_1'][-X_train[1].shape[0]:, :, :, :] = X_train[1]
+
+            for i in range(16):
+                name = 'Y_train_'+str(i)
+                f[name].resize(f[name].shape[0]+Y_train[i].shape[0], axis=0)
+                f[name][-Y_train[i].shape[0]:, :] = Y_train[i]
+        else:
+            f.create_dataset(name='X_train_0',data=X_train[0], maxshape=(None,20,4,4), chunks =(1,20,4,4))
+            f.create_dataset(name='X_train_1',data=X_train[1], maxshape=(None,20,4,4), chunks =(1,20,4,4))
+            for i in range(16):
+                f.create_dataset(name='Y_train_'+str(i),data=Y_train[i],maxshape=(None,20), chunks =(1,20))
 
 
 def init_embed_model(embed_size):
@@ -95,50 +140,71 @@ def init_embed_model(embed_size):
 
     return model
 
-"""
-TODO: Define a Callback function that stops training if all val_loss is below threshold
-"""
-
-
-def train_embed_model(model, X_train_list, Y_train_list):
+def train_embed_model(model, folder):
     """
     Trains the embedding model on the given training data.
     :param model: compiled model
-    :param X_train_list: List with X_train entries
-    :param Y_train_list: List of Y_train entires
+    :param folder: Folder in which the games.hdf5 can be found.
     :return: trained model
     """
+    # Parameters
     epoch_num = 30
     batch_size = 30
+
+    # Extract the training datasets from the given hdf5 file
+    X_train_list = []
+    Y_train_list = []
+
+    with h5py.File(folder + "games.hdf5", 'r') as f:
+        X_train_list.append(f['X_train_0'][()])
+        X_train_list.append(f['X_train_1'][()])
+        for i in range(16):
+            name = 'Y_train_'+str(i)
+            Y_train_list.append(f[name][()])
+
     print("Training size: ", X_train_list[0].shape)
 
-    EarlyStop = EarlyStopping(monitor='val_loss_1', min_delta=0.01)
+    EarlyStop = EarlyStopping(monitor='loss', min_delta=0.005,patience=2)
 
     model.fit(X_train_list,
               Y_train_list,
               epochs = epoch_num,
               batch_size = batch_size,
               callbacks=[EarlyStop],
-              verbose=2)
+              verbose= 2)
 
     return model
 
-def init_and_pretrain_embed_model(embed_size, pre_train_games):
+def tsne_embedding_plot(embed):
     """
-    Initialize and pretrain an embedding model.
-    :param embed_size: integer of embedding size
-    :param pre_train_games: number of games to pre-train on
-    :return: compiled and trained model
+    Plots the weights of the embeddings
+    :param embed: embedding layer
+    :return: matplotlib plot
     """
-    # Plays the initial random games
-    games = initial_random_plays(pre_train_games)
-    # Transform the games list to trainable data
-    X_train, Y_train = games_to_trainable(games)
-    # Initialize the embedding model
-    model = init_embed_model(embed_size)
-    # Train the embedding model on the game data
-    model = train_embed_model(model, X_train, Y_train)
-    return model, X_train, Y_train
+    weights = embed.get_weights()[0]
+    "Creates and TSNE model and plots it"
+    labels = []
+    tokens = []
+    for i in range(weights.shape[2]):
+        tokens.append(weights[0,0,i,:])
+        labels.append(str(2**i))
+    tsne_model = TSNE(perplexity=40, n_components=2, init='pca', n_iter=2500, random_state=23)
+    new_values = tsne_model.fit_transform(tokens)
+    x = []
+    y = []
+    for value in new_values:
+        x.append(value[0])
+        y.append(value[1])
+    plt.figure(figsize=(10, 10))
+    for i in range(len(x)):
+        plt.scatter(x[i], y[i])
+        plt.annotate(labels[i],
+                     xy=(x[i], y[i]),
+                     xytext=(5, 2),
+                     textcoords='offset points',
+                     ha='right',
+                     va='bottom')
+    plt.show()
 
 """
 print("playing the initial random plays")

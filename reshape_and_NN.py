@@ -113,99 +113,18 @@ def init_flat_model():
 
     return model
 
-
-def init_conv_model_1(input_shape):
-    """
-    2D Convolutional network that makes convolutions row and columns wise then flattens and concatenate them,
-    and adds dense layers.
-    :param input_shape: tuple of length 3 that sets the dimensions of the expected input
-    :return: compiled model
-    """
-    filter_size_1 = 32
-    state_input = Input((input_shape[0],input_shape[1],input_shape[2]))
-    row_conv_2 = Conv2D(filters = filter_size_1,
-                      kernel_size=(1,2),
-                      strides=(1,1),
-                      data_format="channels_first",
-                      activation="relu"
-                      )(state_input)
-    row_conv_3 = Conv2D(filters = filter_size_1,
-                      kernel_size=(1,2),
-                      strides=(1,1),
-                      data_format="channels_first",
-                      dilation_rate=(1,2),
-                      activation="relu"
-                      )(state_input)
-    row_conv_4 = Conv2D(filters = filter_size_1,
-                      kernel_size=(1,2),
-                      strides=(1,1),
-                      data_format="channels_first",
-                      dilation_rate=(1,3),
-                      activation="relu"
-                      )(state_input)
-    row_flat_2 = Flatten()(row_conv_2)
-    row_flat_3 = Flatten()(row_conv_3)
-    row_flat_4 = Flatten()(row_conv_4)
-
-    col_conv_2 = Conv2D(filters = filter_size_1,
-                      kernel_size=(2,1),
-                      strides=(1,1),
-                      data_format="channels_first",
-                      activation="relu"
-                      )(state_input)
-    col_conv_3 = Conv2D(filters = filter_size_1,
-                      kernel_size=(2,1),
-                      strides=(1,1),
-                      data_format="channels_first",
-                      dilation_rate=(2,1),
-                      activation="relu"
-                      )(state_input)
-    col_conv_4 = Conv2D(filters = filter_size_1,
-                      kernel_size=(2,1),
-                      strides=(1,1),
-                      data_format="channels_first",
-                      dilation_rate=(3,1),
-                      activation="relu"
-                      )(state_input)
-    col_flat_2 = Flatten()(col_conv_2)
-    col_flat_3 = Flatten()(col_conv_3)
-    col_flat_4 = Flatten()(col_conv_4)
-
-    output = concatenate([row_flat_2, row_flat_3, row_flat_4, col_flat_2, col_flat_3, col_flat_4])
-
-    output = Dense(1024,
-                   activation='relu',
-                   kernel_regularizer=l2(0.002)
-                   )(output)
-    output = Dense(1024,
-                   activation='relu',
-                   kernel_regularizer=l2(0.002)
-                   )(output)
-
-    output = Dense(4, activation='linear')(output)
-
-    model = Model(inputs=state_input, outputs=output)
-
-    print(model.summary())
-
-    opt = Adam()
-    model.compile(loss='mse', optimizer=opt)
-    return model
-
-
-def init_conv_model_2(input_shape):
+def init_conv_model(input_shape):
     """
     2D Convolutional network that makes convolution row and columns wise with shared weights.
     Then flatten, concatenate them and add dense layers.
     :param input_shape: tuple of length 3 that sets the dimensions of the expected input
     :return: compiled model
     """
-    filter_size_1 = 128
-    filter_size_2 = 128
+    filter_size_1 = 32
+    filter_size_2 = 32
     state_input = Input((input_shape[0],input_shape[1],input_shape[2]))
     # Switch row and column axis
-    permut_input = Permute((1,3,2),
-                           input_shape=(input_shape[0],input_shape[1],input_shape[2]))(state_input)
+    permut_input = Permute((1,3,2), input_shape=(input_shape[0],input_shape[1],input_shape[2]))(state_input)
 
     conv_2d = Conv2D(filters=filter_size_1,
                      kernel_size=(4,1),
@@ -229,7 +148,10 @@ def init_conv_model_2(input_shape):
 
     output = concatenate([conv_1, conv_2])
 
-    output = Dense(1024,
+    output = Dense(256,
+                   activation='relu'
+                   )(output)
+    output = Dense(256,
                    activation='relu'
                    )(output)
     output = Dense(4, activation='linear')(output)

@@ -24,18 +24,8 @@ game_shape = (20, 4, 4)
 
 
 """
-Reward function, and entropy calculation function
+Reward function, and function that takes out entries from the replay buffer
 """
-
-def state_entropy(state):
-    entropy = 0
-    for i in range(4): # Iteration over the rows (columns)
-        for j in range(3): # Iteration over the columns (rows)
-            entropy += np.linalg.norm(state[:, i, j]-state[:, i, j + 1],2)
-            entropy += np.linalg.norm(state[:, j, i]-state[:, j + 1, i],2)
-    return entropy/16
-
-
 def replay_to_matrix(reshape_function, model, list, gamma):
     """
     Calculates the target output from the replay variables
@@ -77,6 +67,7 @@ def replay_to_matrix(reshape_function, model, list, gamma):
     Y_train = np.concatenate(Y_train, axis=0)
 
     return X_train, Y_train
+
 
 def getReward(state, new_state, score, new_score, running):
     """
@@ -223,7 +214,7 @@ elif reshape_type == 'flat':
 
 # Initialize model, if reshape_style is 'flat' initialize a feed-forward net otherwise a convolutional
 if reshape_type in ['onehot', 'linear', 'trig']:
-    model = init_conv_model_2(game_shape_after_reshaping)
+    model = init_conv_model(game_shape_after_reshaping)
 else:
     model = init_flat_model()
 
@@ -237,6 +228,7 @@ train_scores, test_scores_avg, test_score_min, test_score_max, model = training(
 name = datetime.datetime.fromtimestamp(
     int(time.time())
 ).strftime('%Y-%m-%d_%H:%M:%S')
+
 with h5py.File(output_path, 'a') as f:
     f[name] = train_scores
     f[name].attrs['test_scores_avg'] = test_scores_avg
