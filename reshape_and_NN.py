@@ -151,9 +151,6 @@ def init_conv_model(input_shape):
     output = Dense(256,
                    activation='relu'
                    )(output)
-    output = Dense(256,
-                   activation='relu'
-                   )(output)
     output = Dense(4, activation='linear')(output)
 
     model = Model(inputs=state_input, outputs=output)

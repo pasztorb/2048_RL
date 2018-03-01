@@ -17,8 +17,9 @@ output_path = sys.argv[3]
 # Fixed variables
 gamma = 0.9
 epsilon = 1
-batch_size = 300
-buffer = 1000
+batch_size = 32
+buffer = 20000
+pre_train_games = 100
 test_num = 50
 game_shape = (20, 4, 4)
 
@@ -81,13 +82,13 @@ def getReward(state, new_state, score, new_score, running):
     """
     # if it makes a move that does not change the placement of the tiles
     if not running:
-        return -20
+        return -1
     # If the game ended
     elif running and ((state==new_state).sum()==game_shape[0]*game_shape[1]*game_shape[2]):
-        return -3
+        return -1
     # Else if it reached a new highest tile
     elif np.where(state==1)[0].max() < np.where(new_state==1)[0].max():
-        return 2
+        return 1
     else:
         return 1
 
@@ -109,7 +110,7 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
     test_play(model=model, reshape_function=reshape_function)
 
     # Looping over the epochs
-    for epoch in range(epochs):
+    for epoch in range(epochs+pre_train_games):
         print("Epcoh number: ", str(epoch+1))
         print("Epsilon value: ", str(epsilon))
 
@@ -153,7 +154,7 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
                 X_train, Y_train = replay_to_matrix(reshape_function, model, replay_list, gamma)
 
                 # Train model on X_train, Y_train
-                model.fit(X_train, Y_train, batch_size=batch_size, epochs=1, verbose=1)
+                model.fit(X_train, Y_train, batch_size=batch_size, epochs=1, verbose=0)
 
             # Update game and score variables
             game = new_game
@@ -163,8 +164,8 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
         train_scores += [score]
         print("Score at the end of the training game %s: " % (epoch + 1,), str(score))
 
-        # Reduce epsilon value after game finished
-        if epsilon > 0.1:
+        # If it is the pre_training_games then proceed otherwise reduce epsion if large enough
+        if epoch < pre_train_games & epsilon > 0.1:
             epsilon -= (1 / epochs)
 
         # If test_num games have passed play test games
@@ -238,6 +239,7 @@ with h5py.File(output_path, 'a') as f:
     f[name].attrs['batch_size'] = batch_size
     f[name].attrs['buffer'] = buffer
     f[name].attrs['epochs_num'] = epochs
+    f[name].attrs['pre_train_games'] = pre_train_games
     f[name].attrs['reshape_type'] = reshape_type
     f[name].attrs['test_num'] = test_num
 
