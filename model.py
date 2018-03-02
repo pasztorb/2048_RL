@@ -21,8 +21,6 @@ batch_size = 32
 buffer = 20000
 pre_train_games = 10000
 test_num = 50
-game_shape = (17, 4, 4)
-
 
 """
 Reward function, and function that takes out entries from the replay buffer
