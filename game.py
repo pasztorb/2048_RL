@@ -5,55 +5,39 @@ The game stores current state as a numpy array and the score as an integer
 
 import numpy as np
 
-game_shape = (20,4,4)
-
 def visualize_state(state, score):
     """
     Visualize the current given state
-    :param state: 20x4x4 numpy array
+    :param state: 4x4 numpy array
     :return: None
     """
     print("Current score: ",str(score))
     for i in range(4): # Iterate over the rows
-        row = [0,0,0,0]
-        for j in range(4): # Iterate over the columns
-            value = np.where(state[1:,i,j]==1)[0]
-            if len(value)>1:
-                print("Not valid state")
-            if len(value) == 1:
-                row[j] = 2**(value[0]+1)
-        print(row)
+        print(list(state[i,:]))
 
 def add_tile(state):
     """
     Funtion that adds a tile randomly to the given state
-    :param state: 20x4x4 numpy array
-    :return: 20x4x4 numpy array
+    :param state: 4x4 numpy array
+    :return: 4x4 numpy array
     """
-    # sum of the array along the first array, if 0 it is empty if 1 it has a number in it
-    used_tiles = state[1:,:,:].sum(axis=0)
     # possible index pairs to put number in it
-    possible_tiles = np.where(used_tiles==0)
+    possible_tiles = np.where(state==0)
     # If there is no possible tile, it returns the original state
-    if len(possible_tiles[0]) == 0:
-        return state
-    else:
+    if len(possible_tiles[0]) != 0:
         # choose one randomly
         index = np.random.randint(len(possible_tiles[0]))
         # add a tile 2 to the chosen tile
-        state[1, possible_tiles[0][index], possible_tiles[1][index]] = 1
-        state[0, possible_tiles[0][index], possible_tiles[1][index]] = 0
-
-        return state
+        state[possible_tiles[0][index], possible_tiles[1][index]] = 2
+    return state
 
 def initialize_game():
     """
     This function initialize a 4x4 game with two randomly added tile
-    :return: 20X4X4 numpy array, score: 0
+    :return: 4X4 numpy array, score: 0
     """
-    # empty game grid, only 1s in the first layer
-    state = np.zeros((game_shape[0],game_shape[1],game_shape[2]), dtype=np.int8)
-    state[0, :, :] = 1
+    # empty game table
+    state = np.zeros((4,4))
     # add two tile randomly
     for i in range(2):
         state = add_tile(state)
@@ -62,52 +46,34 @@ def initialize_game():
 def shift_row(row, score):
     """
     Function that makes a move on the given row.
-    :param row: 20x4 numpy array
-    :return: 20x4 updated numpy array
+    :param row: (4,) numpy array
+    :return: (4, updated numpy array
     """
     # new array to store the changed row and score
     row_updated = row.copy()
     score_updated = score
 
-    # Sums up the first axis
-    row_sum = row_updated.sum(axis=0)
-    # If there is no entry in the row return it
-    if row_sum.sum() == 0:
-        return row_updated, score_updated
-    # If there is at least one entry continue
-    # Shift the entries (drop the empty columns and add them to the end)
-    columns_to_drop = []
-    for i in range(4):
-        # If there is no value in the entry delete that
-        if row_sum[i] == 0:
-            columns_to_drop += [i]
-    row_updated = np.delete(row_updated, columns_to_drop, 1)
-    # Add rows to fill the dropped
-    row_updated = np.concatenate([row_updated, np.zeros((game_shape[0] - 1,len(columns_to_drop)))], axis=1)
+    # Checks if there is possible merge in the row
+    possible_merge = False
+    unique, counts = np.unique(row, return_counts=True)
+    for i in range(unique.shape[0]):
+        if (counts[i] > 1) and (unique[i] != 0):
+            possible_merge = True
+    # If merge is possible, iterates over the possible patterns
+    if possible_merge:
+        for case in [(0,3),(0,2),(0,1),(1,3),(1,2),(2,3)]:
+            # If the tiles are the same at the two position and they are not zeros, but all the entries between them are zero
+            if (row_updated[case[0]] == row_updated[case[1]]) and (row_updated[case[0]] != 0) and (row_updated[range(case[0]+1,case[1])].sum()==0):
+                # Update tiles
+                row_updated[case[0]] = row[case[0]]*2
+                row_updated[case[1]] = 0
+                # Update score
+                score_updated += row[case[0]]*2
 
-    # Iterate over the all possible merging place
-    temp_row = row_updated.copy() # Additional copy to avoid several merging of one tile
-    for i in range(1,row_updated.shape[0]):
-        for j in range(row_updated.shape[1]-1):
-            # If the merge happens update the tiles
-            if row_updated[i-1,j]*row_updated[i-1,j+1] == 1:
-                temp_row[i,j] = 1
-                temp_row[i - 1, j] = 0
-                temp_row[i - 1, j + 1] = 0
-                row_updated[i-1,j+1] = 0 # Avoid to merge 3 similar into two new tiles
-                score_updated += 2**(i+1) # Update scores
-    row_updated = temp_row # update row_update variable
-
-    # Shift again to fill the holes made by merging
-    row_sum = row_updated.sum(axis=0)
-    columns_to_drop = []
-    for i in range(4):
-        # If there is no value in the entry delete that
-        if row_sum[i] == 0:
-            columns_to_drop += [i]
-    row_updated = np.delete(row_updated, columns_to_drop, 1)
-    # Add rows to fill the dropped
-    row_updated = np.concatenate([row_updated, np.zeros((game_shape[0] - 1,len(columns_to_drop)))], axis=1)
+    # Shift tiles
+    for i in reversed(range(3)):
+        if row_updated[i] == 0:
+            row_updated[i:] = np.roll(row_updated[i:],-1)
 
     return row_updated, score_updated
 
@@ -116,54 +82,45 @@ def action_move(state, score, move, end_check = True):
     """
     Function to make the given move, add a new tile, update the score value and return continuing = False if there is no possible further move
     move: 0 - up, 1 - right, 2 - down, 3 - left
-    :param state: 20x4x4 array, score: current score, move: move to make on the state
+    :param state: 4x4 array, score: current score, move: move to make on the state
+    :param end_check: checks if the game has ended or not
     :return: state, score, running
     """
     assert move in [0,1,2,3]
     # Copy the state in order to keep the move from immediately change the state of the game
     new_state = state.copy()
-    # Cut down the first layer which represents the empty tiles
-    new_state = new_state[1:, :, :]
     # Copy the original score so it won't update it automatically the original variable
     new_score = score
-    for i in range(4): # Iterate over the chosen axis
-        if move == 0: # Up move
-            # Shifts each column
-            new_state[:,:,i], new_score = shift_row(new_state[:,:,i], new_score)
 
-        if move == 2: # Down move
-            # Shifts the revered columns since the shift is downward
-            new_state[:, :, i], new_score = shift_row(new_state[:, ::-1, i], new_score)
-            new_state[:, :, i] = new_state[:, ::-1, i] # Reverts back the column
+    # updates all row given the move
+    for i in range(4):
+        if move == 0:
+            new_state[:,i], new_score = shift_row(new_state[:,i], new_score)
+        elif move == 1:
+            new_state[i,::-1], new_score = shift_row(new_state[i,::-1], new_score)
+        elif move == 2:
+            new_state[::-1, i], new_score = shift_row(new_state[::-1, i], new_score)
+        else:
+            new_state[i, :], new_score = shift_row(new_state[i, :], new_score)
 
-        if move == 3: # Left move
-            # Shifts each row
-            new_state[:,i,:], new_score = shift_row(new_state[:,i,:], new_score)
-
-        if move == 1: # Right move
-            # Shifts each reverted rows and the revert them back
-            new_state[:, i, :], new_score = shift_row(new_state[:, i, ::-1], new_score)
-            new_state[:,i,:] = new_state[:,i,::-1]
-
-    # Add back the first layer to represent empty tiles
-    first_layer = np.ones((1, 4, 4))
-    first_layer = first_layer - new_state.sum(axis=0)[np.newaxis, :, :]
-    new_state = np.concatenate([first_layer, new_state], axis=0)
-
-    # Add a new tile only if there has been change in the placement of the original tiles
-    if (new_state == state).sum() != game_shape[0]*game_shape[1]*game_shape[2]:
+    # If something has changed add a new tile
+    if (new_state==state).sum() != 16:
         new_state = add_tile(new_state)
 
-    # Check if the game can continue (no change can happen after the 4 different move)
+    running = True
+    # Checks if any further move is possible
     if end_check:
         running = False
-        # If there is difference after one of the move then there is possible move so it is not yet the end of the game
-        for i in range(4):
-            state_next, _ , _ = action_move(new_state, score, i, end_check=False)
-            if (new_state == state_next).sum() != game_shape[0]*game_shape[1]*game_shape[2]:
-                running = True
-    else:
-        running = True
+        # If there is at least one zero in the state go on, since move is possible
+        if np.where(new_state==0)[0].shape[0] == 0:
+            # Iterate over the actions
+            for action in range(4):
+                tmp_state, _, _ = action_move(new_state, 0, action, end_check=False)
+                # If the tmp_state is not identical to the new_state
+                if (new_state == tmp_state).sum() != 16:
+                    running = True
+        else:
+            running = True
 
     return new_state, new_score, running
 

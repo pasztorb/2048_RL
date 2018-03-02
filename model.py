@@ -19,9 +19,9 @@ gamma = 0.9
 epsilon = 1
 batch_size = 32
 buffer = 20000
-pre_train_games = 100
+pre_train_games = 10000
 test_num = 50
-game_shape = (20, 4, 4)
+game_shape = (17, 4, 4)
 
 
 """
@@ -54,7 +54,7 @@ def replay_to_matrix(reshape_function, model, list, gamma):
 
         # Update target value
         # If the new state is not terminal and it made a valid move
-        if i[4] == True and ((i[0]==i[3]).sum() != game_shape[0]*game_shape[1]*game_shape[2]):
+        if i[4] == True and ((i[0]==i[3]).sum() != 16):
             y[0][i[1]] = (i[2] + (gamma * maxQ))
         else:
             y[0][i[1]] = i[2]
@@ -84,10 +84,10 @@ def getReward(state, new_state, score, new_score, running):
     if not running:
         return -1
     # If the game ended
-    elif running and ((state==new_state).sum()==game_shape[0]*game_shape[1]*game_shape[2]):
+    elif running and ((state==new_state).sum()==16):
         return -1
     # Else if it reached a new highest tile
-    elif np.where(state==1)[0].max() < np.where(new_state==1)[0].max():
+    elif state.max() < new_state.max():
         return 1
     else:
         return 1
@@ -120,13 +120,12 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
         # Play training game
         running = True
         while running:
-            # Evaluate on the current state Q(s_i)
-            qval = model.predict(reshape_function(game), batch_size=1)
-
             # Choose if the next action is random or not
             if (np.random.random() < epsilon):
                 action = np.random.randint(0, 4)
             else:
+                # Evaluate on the current state Q(s_i) and take accordingly
+                qval = model.predict(reshape_function(game), batch_size=1)
                 action = np.argmax(qval)
 
             # Make a move
@@ -162,7 +161,10 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
 
         # Store and print score at the end of the training game
         train_scores += [score]
-        print("Score at the end of the training game %s: " % (epoch + 1,), str(score))
+        if epoch < pre_train_games:
+            print("Score at the end of the pre-training game %s: " % (epoch + 1,), str(score))
+        else:
+            print("Score at the end of the training game %s: " % (epoch + 1,), str(score))
 
         # If it is the pre_training_games then proceed otherwise reduce epsion if large enough
         if epoch < pre_train_games & epsilon > 0.1:
@@ -201,8 +203,8 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
 
 # Choose reshape function and game_shape_after_reshaping based on reshape_type
 if reshape_type == 'onehot':
-    reshape_function = reshape_state
-    game_shape_after_reshaping = (20, 4, 4)
+    reshape_function = onehot_reshape
+    game_shape_after_reshaping = (17, 4, 4)
 elif reshape_type == 'linear':
     reshape_function = linear_reshape
     game_shape_after_reshaping = (1, 4, 4)

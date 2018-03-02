@@ -6,7 +6,7 @@ import datetime
 
 from game import *
 from embedding_2048 import *
-from reshape_and_NN import reshape_state
+from reshape_and_NN import onehot_reshape
 
 from keras.models import Model
 from keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, Input, concatenate
@@ -300,7 +300,7 @@ embed_model, X_embedding, Y_embedding = init_and_pretrain_embed_model(embedding_
 model = init_model(game_shape, embed_model)
 
 # Run training on model and reshape function
-train_scores, test_scores_avg, test_score_min, test_score_max, model = training(epochs, gamma, model, embed_model, reshape_state, X_embedding, Y_embedding)
+train_scores, test_scores_avg, test_score_min, test_score_max, model = training(epochs, gamma, model, embed_model, onehot_reshape, X_embedding, Y_embedding)
 
 # Write out the generated data and the statistics into the hdf5 file given as the output path
 # name is given as the training timestamp
