@@ -18,7 +18,7 @@ output_path = sys.argv[3]
 gamma = 0.9
 epsilon = 1
 batch_size = 32
-buffer = 20000
+buffer = 200000
 pre_train_games = 10000
 test_num = 50
 
@@ -85,10 +85,10 @@ def getReward(state, new_state, score, new_score, running):
     elif running and ((state==new_state).sum()==16):
         return -1
     # Else if it reached a new highest tile
-    elif state.max() < new_state.max():
+    elif (state.max() < new_state.max()) and (new_state.max() in [512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]):
         return 1
     else:
-        return 1
+        return 0
 
 
 """
@@ -166,7 +166,7 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
 
         # If it is the pre_training_games then proceed otherwise reduce epsion if large enough
         if epoch < pre_train_games & epsilon > 0.1:
-            epsilon -= (1 / epochs)
+            epsilon -= (2 / epochs)
 
         # If test_num games have passed play test games
         if (epoch % (epochs//test_num)) == 0:

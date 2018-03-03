@@ -1,11 +1,9 @@
 import numpy as np
 
 from keras.models import Model, Sequential
-from keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, Input, concatenate
+from keras.layers import Dense, Flatten, Conv2D, Input, concatenate
 from keras.layers.core import Permute
 from keras.optimizers import Adam, SGD, RMSprop
-from keras.regularizers import l2
-from keras import backend as K
 
 
 """
@@ -138,6 +136,7 @@ def init_conv_model(input_shape):
 
     output = Dense(256,
                    activation='relu',
+                   use_bias=False
                    )(output)
     output = Dense(4, activation='linear')(output)
 
@@ -145,7 +144,7 @@ def init_conv_model(input_shape):
 
     print(model.summary())
 
-    opt = Adam(lr=0.0001)
+    opt = RMSprop()
     model.compile(loss='mse', optimizer=opt)
     return model
 
