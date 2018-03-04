@@ -119,10 +119,10 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
             # Observe Reward
             reward = getReward(game, new_game, score, new_score, running)
 
-            # Experience replay storage
-            if (len(memory) < buffer):  # if buffer not filled, add to it
-                memory.append((game ,action, reward, new_game, running))
-            else:
+            # Add the current state to the experience replay storage
+            memory.append((game, action, reward, new_game, running))
+
+            if buffer < len(memory):
                 model = replay_train(reshape_function, model, memory, batch_size, gamma)
 
             # Update game and score variables
