@@ -3,6 +3,8 @@ import sys
 import h5py
 import time
 import datetime
+from collections import deque
+import random
 
 from game import *
 from reshape_and_NN import *
@@ -16,56 +18,41 @@ output_path = sys.argv[3]
 
 # Fixed variables
 gamma = 0.9
+learning_decay = 0.995
 epsilon = 1
 batch_size = 64
-buffer = 100000
+buffer = 5000
 pre_train_games = 1000
 test_num = 50
 
 """
 Reward function, and function that takes out entries from the replay buffer
 """
-def replay_to_matrix(reshape_function, model, list, gamma):
+def replay_train(reshape_function, model, replay, batch_size, gamma):
     """
     Calculates the target output from the replay variables
     :param reshape_function: given reshape function
     :param model: model in training
-    :param list: list of replay tuples
+    :param replay: replay deque object
+    :param batch_size: batch_size
     :param gamma: The discount factor
-    :return: X_train, Y_train
+    :return: model
     """
     # input list of tuples: (game ,action, reward, new_game, running)
-    X_train, Y_train = [], []
+    sample_batch = random.sample(replay, batch_size)
 
-    for i in list:
-        # Calculate Q(s_i)
-        x = reshape_function(i[0])
-        qval = model.predict(x, batch_size=1)
+    for state, action, reward, next_state, running in sample_batch:
+        # Calculate reward
+        target = reward
+        if running:
+          target = reward + gamma * np.amax(model.predict(reshape_function(next_state)))
+        # Calculate current qvalues and the target
+        target_f = model.predict(reshape_function(state))
+        target_f[0][action] = target
+        # Train the network
+        model.fit(reshape_function(state), target_f, epochs=1, verbose=0)
 
-        # Calculate Q(s_{i+1})
-        newQ = model.predict(reshape_function(i[3]), batch_size=1)
-        maxQ = np.max(newQ)
-
-        # Calculate the target output
-        y = np.zeros((1, 4))
-        y[:] = qval[:]
-
-        # Update target value
-        # If the new state is not terminal and it made a valid move
-        if i[4] == True and ((i[0]==i[3]).sum() != 16):
-            y[0][i[1]] = (i[2] + (gamma * maxQ))
-        else:
-            y[0][i[1]] = i[2]
-
-        # Append to X_train, Y_train
-        X_train.append(x)
-        Y_train.append(y)
-
-    # Concatenate the individual training and target variables
-    X_train = np.concatenate(X_train, axis=0)
-    Y_train = np.concatenate(Y_train, axis=0)
-
-    return X_train, Y_train
+    return model
 
 
 def getReward(state, new_state, score, new_score, running):
@@ -96,7 +83,7 @@ Main training function
 """
 def training(epochs, gamma, model, reshape_function, epsilon=1):
     # Variables for storage during training
-    replay = [] # Replay storeage
+    memory = deque(maxlen=buffer) # Replay storeage
     train_scores = [] # Scores at the end of the training games
     test_scores_avg = [] # Average scores of the test episodes
     test_scores_min = [] # Minimum scores of the test episodes
@@ -133,29 +120,18 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
             reward = getReward(game, new_game, score, new_score, running)
 
             # Experience replay storage
-            if (len(replay) < buffer):  # if buffer not filled, add to it
-                replay.append((game ,action, reward, new_game, running))
-            else: #Train
-                # Choose randomly from the replay list
-                indicies = np.random.choice(buffer, batch_size)
-                replay_list = []
-
-                # Append chosen entries
-                for i in indicies:
-                    replay_list.append(replay[i])
-
-                # Remove used entries
-                replay = [i for j, i in enumerate(replay) if j not in indicies]
-
-                # Transform the replay list into trainable matrices
-                X_train, Y_train = replay_to_matrix(reshape_function, model, replay_list, gamma)
-
-                # Train model on X_train, Y_train
-                model.fit(X_train, Y_train, batch_size=batch_size, epochs=1, verbose=1)
+            if (len(memory) < buffer):  # if buffer not filled, add to it
+                memory.append((game ,action, reward, new_game, running))
+            else:
+                model = replay_train(reshape_function, model, memory, batch_size, gamma)
 
             # Update game and score variables
             game = new_game
             score = new_score
+
+            # If it is the pre_training_games then proceed otherwise reduce epsion if large enough
+            if (epoch >= pre_train_games) & (epsilon > 0.1):
+                epsilon *= learning_decay
 
         # Store and print score at the end of the training game
         train_scores += [score]
@@ -163,10 +139,6 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
             print("Score at the end of the pre-training game %s: " % (epoch + 1,), str(score))
         else:
             print("Score at the end of the training game %s: " % (epoch + 1,), str(score))
-
-        # If it is the pre_training_games then proceed otherwise reduce epsion if large enough
-        if (epoch >= pre_train_games) & (epsilon > 0.1):
-            epsilon -= (2 / epochs)
 
         # If test_num games have passed play test games
         if (epoch % (epochs//test_num)) == 0:
@@ -180,15 +152,6 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
             test_scores_min += [min(score_list)]
             test_scores_max += [max(score_list)]
             print("Maximum average score after Game %s: " % (epoch + 1,), str(max(test_scores_avg)))
-
-    # Train on the remaining samples in the replay list
-    print("Train on the remaining samples")
-
-    # Reshape remaining replay data
-    X_train, Y_train = replay_to_matrix(reshape_function, model, replay, gamma)
-
-    # Fit the model on data
-    model.fit(X_train, Y_train, batch_size=batch_size//5, epochs=1, verbose=1)
 
     # Test play after last train
     score_list, _ = test_play(model=model, reshape_function=reshape_function)
