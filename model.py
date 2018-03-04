@@ -20,8 +20,8 @@ output_path = sys.argv[3]
 gamma = 0.9
 learning_decay = 0.995
 epsilon = 1
-batch_size = 64
-buffer = 5000
+batch_size = 32
+buffer = 3000
 pre_train_games = 1000
 test_num = 50
 
