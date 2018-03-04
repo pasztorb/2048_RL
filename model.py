@@ -18,11 +18,10 @@ output_path = sys.argv[3]
 
 # Fixed variables
 gamma = 0.9
-learning_decay = 0.995
 epsilon = 1
 batch_size = 32
-buffer = 3000
-pre_train_games = 1000
+buffer = 2000
+pre_train_games = 2000
 test_num = 50
 
 """
@@ -129,9 +128,9 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
             game = new_game
             score = new_score
 
-            # If it is the pre_training_games then proceed otherwise reduce epsion if large enough
-            if (epoch >= pre_train_games) & (epsilon > 0.1):
-                epsilon *= learning_decay
+        # If it is the pre_training_games then proceed otherwise reduce epsion if large enough
+        if (epoch >= pre_train_games) & (epsilon > 0.1):
+            epsilon -= 1.5/epochs
 
         # Store and print score at the end of the training game
         train_scores += [score]
