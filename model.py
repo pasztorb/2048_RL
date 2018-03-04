@@ -17,9 +17,9 @@ output_path = sys.argv[3]
 # Fixed variables
 gamma = 0.9
 epsilon = 1
-batch_size = 32
-buffer = 200000
-pre_train_games = 10000
+batch_size = 64
+buffer = 100000
+pre_train_games = 1000
 test_num = 50
 
 """
@@ -151,7 +151,7 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
                 X_train, Y_train = replay_to_matrix(reshape_function, model, replay_list, gamma)
 
                 # Train model on X_train, Y_train
-                model.fit(X_train, Y_train, batch_size=batch_size, epochs=1, verbose=0)
+                model.fit(X_train, Y_train, batch_size=batch_size, epochs=1, verbose=1)
 
             # Update game and score variables
             game = new_game
@@ -165,7 +165,7 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
             print("Score at the end of the training game %s: " % (epoch + 1,), str(score))
 
         # If it is the pre_training_games then proceed otherwise reduce epsion if large enough
-        if epoch < pre_train_games & epsilon > 0.1:
+        if (epoch >= pre_train_games) & (epsilon > 0.1):
             epsilon -= (2 / epochs)
 
         # If test_num games have passed play test games

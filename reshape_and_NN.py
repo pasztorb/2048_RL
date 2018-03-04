@@ -60,10 +60,11 @@ def trig_reshape(state):
 def flat_reshape(state):
     """
     Reshapes the state variable into a flat array
-    :param state: 20x4x4 numpy array
-    :return: 1x360 numpy array
+    :param state: 4x4 numpy array
+    :return: 1x272 numpy array
     """
-    return state.reshape((1,state.shape[0]*state.shape[1]*state.shape[2]))
+    onehot_state = onehot_reshape(state)
+    return onehot_state.reshape((1,onehot_state.shape[1]*onehot_state.shape[2]*onehot_state.shape[3]))
 
 
 """
@@ -77,12 +78,14 @@ def init_flat_model():
     """
     model = Sequential()
     model.add(Dense(
-        1024,
+        256,
         activation='relu',
-        input_shape=(320,)
+        use_bias=False,
+        input_shape=(272,)
     ))
     model.add(Dense(
-        1024,
+        128,
+        use_bias=False,
         activation='relu'
     ))
     model.add(Dense(
@@ -92,7 +95,7 @@ def init_flat_model():
 
     print(model.summary())
 
-    opt = Adam()
+    opt = RMSprop()
     model.compile(loss='mse', optimizer=opt)
 
     return model
