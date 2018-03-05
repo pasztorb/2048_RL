@@ -10,18 +10,18 @@ from game import *
 from reshape_and_NN import *
 
 # Variables given in command lines
-# Sample call: python3 model.py 1000 onehot output_file.hdf5
-epochs = int(sys.argv[1])
-reshape_type = sys.argv[2]
+# Sample call: python3 model.py 1000 10000 onehot output_file.hdf5
+pre_train_count = int(sys.argv[1])
+train_count = int(sys.argv[2])
+reshape_type = sys.argv[3]
 assert reshape_type in ['onehot', 'linear', 'trig', 'flat']
-output_path = sys.argv[3]
+output_path = sys.argv[4]
 
 # Fixed variables
 gamma = 0.9
 epsilon = 1
 batch_size = 16
 buffer = 1000
-pre_train_games = 1000
 test_num = 50
 
 """
@@ -38,7 +38,12 @@ def replay_train(reshape_function, model, replay, batch_size, gamma):
     :return: model
     """
     # input list of tuples: (game ,action, reward, new_game, running)
+    # Random sampling
     sample_batch = random.sample(replay, batch_size)
+
+    # training data sets
+    X_train = []
+    Y_train = []
 
     for state, action, reward, next_state, running in sample_batch:
         # Calculate reward
@@ -48,8 +53,16 @@ def replay_train(reshape_function, model, replay, batch_size, gamma):
         # Calculate current qvalues and the target
         target_f = model.predict(reshape_function(state))
         target_f[0][action] = target
-        # Train the network
-        model.fit(reshape_function(state), target_f, epochs=1, verbose=0)
+        # Appending sample to the batch datasets
+        Y_train += [target_f]
+        X_train += [reshape_function(state)]
+
+    # merging the data
+    X_train = np.concatenate(X_train, axis = 0)
+    Y_train = np.concatenate(Y_train, axis = 0)
+
+    # Train the network
+    model.fit(X_train, Y_train, epochs=1, verbose=0)
 
     return model
 
@@ -81,7 +94,7 @@ def getReward(state, new_state, score, new_score, running):
 """
 Main training function
 """
-def training(epochs, gamma, model, reshape_function, epsilon=1):
+def training(main_count, pre_count, gamma, model, reshape_function, epsilon=1):
     # Variables for storage during training
     memory = deque(maxlen=buffer) # Replay storage
     train_scores = [] # Scores at the end of the training games
@@ -94,9 +107,13 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
     print("First game after initialization...")
     test_play(model=model, reshape_function=reshape_function)
 
+    # Set counter and epoch to zero
+    count = 0
+    epoch = 0
+
     # Looping over the epochs
-    for epoch in range(epochs+pre_train_games):
-        print("Epcoh number: ", str(epoch+1))
+    while count < main_count+pre_count:
+        print("Epoch number: ", str(epoch+1))
         print("Epsilon value: ", str(epsilon))
 
         # Initialize game
@@ -124,26 +141,27 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
 
             if buffer <= len(memory):
                 model = replay_train(reshape_function, model, memory, batch_size, gamma)
+                # Increase count
+                count += 1
+                # Decrease epsion if it is over the pre-training count
+                if (count >= pre_count) & (epsilon > 0.1):
+                    epsilon -= 1.5 / main_count
 
             # Update game and score variables
             game = new_game
             score = new_score
 
-        # If it is the pre_training_games then proceed otherwise reduce epsion if large enough
-        if (epoch >= pre_train_games) & (epsilon > 0.1):
-            epsilon -= 1.5/epochs
+        # Add one to epoch number
+        epoch += 1
 
         # Store and print score at the end of the training game
         train_scores += [score]
-        if epoch < pre_train_games:
-            print("Score at the end of the pre-training game %s: " % (epoch + 1,), str(score))
-        else:
-            print("Score at the end of the training game %s: " % (epoch + 1,), str(score))
+        print("Score at the end of the game %s: " % (epoch), str(score))
+        print("Max tile of the training game: ", str(game.max()))
 
         # If test_num games have passed play test games
-        if (epoch % (epochs//test_num)) == 0:
-            print("Running test plays...")
-            print("Current epsilon value: ", str(epsilon))
+        if ((epoch % 500) == 0) and (epoch != 0):
+            print("Running test plays after %s games." %(epoch))
             # Test play
             score_list = avg_test_plays(20, model=model, reshape_function=reshape_function)
             print("Average, min and max of the test scores: ", np.mean(score_list), min(score_list), max(score_list))
@@ -184,7 +202,7 @@ else:
 
 
 # Run training on model and reshape function
-train_scores, test_scores_avg, test_score_min, test_score_max, model = training(epochs, gamma, model, reshape_function)
+train_scores, test_scores_avg, test_score_min, test_score_max, model = training(train_count, pre_train_count, gamma, model, reshape_function)
 
 
 # Write out the generated data and the statistics into the hdf5 file given as the output path
@@ -201,8 +219,8 @@ with h5py.File(output_path, 'a') as f:
     f[name].attrs['gamma'] = gamma
     f[name].attrs['batch_size'] = batch_size
     f[name].attrs['buffer'] = buffer
-    f[name].attrs['epochs_num'] = epochs
-    f[name].attrs['pre_train_games'] = pre_train_games
+    f[name].attrs['epochs_num'] = train_count
+    f[name].attrs['pre_train_games'] = pre_train_count
     f[name].attrs['reshape_type'] = reshape_type
     f[name].attrs['test_num'] = test_num
 

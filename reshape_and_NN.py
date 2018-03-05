@@ -78,13 +78,13 @@ def init_flat_model():
     """
     model = Sequential()
     model.add(Dense(
-        512,
+        256,
         activation='relu',
         use_bias=False,
         input_shape=(272,)
     ))
     model.add(Dense(
-        256,
+        128,
         use_bias=False,
         activation='relu'
     ))

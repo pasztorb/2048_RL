@@ -7,4 +7,4 @@
 
 # running
 module load keras/2.1.4
-python3 model.py 100000 onehot 100000_onehot.hdf5 &> $SLURM_JOB_ID.out
+python3 model.py 500 10000 onehot 10000_onehot.hdf5 &> $SLURM_JOB_ID.out
