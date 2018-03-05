@@ -19,9 +19,9 @@ output_path = sys.argv[3]
 # Fixed variables
 gamma = 0.9
 epsilon = 1
-batch_size = 32
-buffer = 2000
-pre_train_games = 2000
+batch_size = 16
+buffer = 1000
+pre_train_games = 5000
 test_num = 50
 
 """
@@ -70,8 +70,9 @@ def getReward(state, new_state, score, new_score, running):
     # If the game ended
     elif running and ((state==new_state).sum()==16):
         return -1
+
     # Else if it reached a new highest tile
-    elif (state.max() < new_state.max()) and (new_state.max() in [512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]):
+    elif (state.max() < new_state.max()) & (new_state.max() in [256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]):
         return 1
     else:
         return 0
@@ -82,7 +83,7 @@ Main training function
 """
 def training(epochs, gamma, model, reshape_function, epsilon=1):
     # Variables for storage during training
-    memory = deque(maxlen=buffer) # Replay storeage
+    memory = deque(maxlen=buffer) # Replay storage
     train_scores = [] # Scores at the end of the training games
     test_scores_avg = [] # Average scores of the test episodes
     test_scores_min = [] # Minimum scores of the test episodes
