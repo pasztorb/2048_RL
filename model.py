@@ -21,7 +21,7 @@ gamma = 0.9
 epsilon = 1
 batch_size = 16
 buffer = 1000
-pre_train_games = 5000
+pre_train_games = 1000
 test_num = 50
 
 """
@@ -122,7 +122,7 @@ def training(epochs, gamma, model, reshape_function, epsilon=1):
             # Add the current state to the experience replay storage
             memory.append((game, action, reward, new_game, running))
 
-            if buffer < len(memory):
+            if buffer <= len(memory):
                 model = replay_train(reshape_function, model, memory, batch_size, gamma)
 
             # Update game and score variables
