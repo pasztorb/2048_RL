@@ -84,7 +84,7 @@ def init_flat_model():
         input_shape=(272,)
     ))
     model.add(Dense(
-        128,
+        256,
         use_bias=False,
         activation='relu'
     ))

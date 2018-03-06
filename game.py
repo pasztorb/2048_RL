@@ -13,7 +13,7 @@ def visualize_state(state, score):
     """
     print("Current score: ",str(score))
     for i in range(4): # Iterate over the rows
-        print(list(state[i,:]))
+        print(list(state[i,:].astype(int)))
 
 def add_tile(state):
     """
@@ -138,6 +138,7 @@ def test_play(model = None, reshape_function = None, visualize=True):
     running = True
     score_list = [0]
     game_list = [game]
+    action_list = []
     # Play the game based on the neural network
     while running:
         # If model is given made move based on it, otherwise randomly
@@ -146,6 +147,8 @@ def test_play(model = None, reshape_function = None, visualize=True):
             action = np.argmax(qval)
         else:
             action = np.random.randint(0, 4)
+        # Append action to the list
+        action_list += [action]
         # Make move
         game, score, running = action_move(game, score, action)
         score_list += [score]
@@ -162,7 +165,7 @@ def test_play(model = None, reshape_function = None, visualize=True):
             if visualize:
                 print("Not good enough, trapped")
             running = False
-    return score_list, game_list
+    return game_list, score_list, action_list
 
 
 def avg_test_plays(plays_num, model=None ,reshape_function=None):
@@ -175,7 +178,7 @@ def avg_test_plays(plays_num, model=None ,reshape_function=None):
     """
     list_of_scores = []
     for i in range(plays_num):
-        scores, _ = test_play(model, reshape_function, visualize=False)
+        _, scores, _ = test_play(model, reshape_function, visualize=False)
         list_of_scores += [scores[-1]]
 
     return list_of_scores

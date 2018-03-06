@@ -10,22 +10,28 @@ from game import *
 from reshape_and_NN import *
 
 # Variables given in command lines
-# Sample call: python3 model.py 1000 10000 onehot output_file.hdf5
-pre_train_count = int(sys.argv[1])
-train_count = int(sys.argv[2])
-reshape_type = sys.argv[3]
+# Sample call: python3 model.py 10000 onehot random_games.hdf5 output_file.hdf5
+
+train_count = int(sys.argv[1])
+pre_train_data = sys.argv[3]
+reshape_type = sys.argv[2]
 assert reshape_type in ['onehot', 'linear', 'trig', 'flat']
 output_path = sys.argv[4]
 
 # Fixed variables
-gamma = 0.9
+gamma = 0.95
 epsilon = 1
-batch_size = 16
+batch_size = 32
 buffer = 1000
-test_num = 50
+test_freq = 100
+
+print("Train count: ", train_count)
+print("Reshape type: ",reshape_type)
+print("Batch size and buffer: ", batch_size, buffer)
+
 
 """
-Reward function, and function that takes out entries from the replay buffer
+Replay training function
 """
 def replay_train(reshape_function, model, replay, batch_size, gamma):
     """
@@ -66,7 +72,9 @@ def replay_train(reshape_function, model, replay, batch_size, gamma):
 
     return model
 
-
+"""
+Reward function
+"""
 def getReward(state, new_state, score, new_score, running):
     """
     Function that returns the reward given the state and action made.
@@ -83,18 +91,55 @@ def getReward(state, new_state, score, new_score, running):
     # If the game ended
     elif running and ((state==new_state).sum()==16):
         return -1
-
     # Else if it reached a new highest tile
-    elif (state.max() < new_state.max()) & (new_state.max() in [256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]):
+    elif (state.max() < new_state.max()) & (new_state.max() in [128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]):
         return 1
     else:
         return 0
 
+"""
+Pre-training function
+"""
+def pre_train(model, reshape_function, data_path):
+    print("Pre-training...")
+    # Replay memory
+    pre_memory = deque(maxlen=buffer) # Replay storage
+
+    with h5py.File("data/"+data_path, 'a') as f:
+        lengths = f.attrs['lengths']
+        # Iterate over the lengths list
+        for i, length in enumerate(lengths):
+            # For each game iterate over the states
+            for j in range(length):
+                # Name of the training state
+                name = "game_" + str(i + 1) + "_play_" + str(j + 1)
+
+                # Retrive the data for the game
+                state = f[name][0,:,:]
+                new_state = f[name][1,:,:]
+                score = f[name].attrs["score"]
+                new_score = f[name].attrs["new_score"]
+                action = f[name].attrs["action"]
+                running = f[name].attrs["running"]
+
+                # Caculate the reward
+                reward = getReward(state, new_state, score, new_score, running)
+
+                # Add the current state to the experience replay storage
+                pre_memory.append((state, action, reward, new_state, running))
+
+                if buffer <= len(pre_memory):
+                    model = replay_train(reshape_function, model, pre_memory, batch_size, gamma)
+
+            if i%10 == 0:
+                print("pre-trained for: ",i," games")
+
+    return model
 
 """
 Main training function
 """
-def training(main_count, pre_count, gamma, model, reshape_function, epsilon=1):
+def training(main_count, pre_train_data, gamma, model, reshape_function, epsilon=1):
     # Variables for storage during training
     memory = deque(maxlen=buffer) # Replay storage
     train_scores = [] # Scores at the end of the training games
@@ -102,17 +147,19 @@ def training(main_count, pre_count, gamma, model, reshape_function, epsilon=1):
     test_scores_min = [] # Minimum scores of the test episodes
     test_scores_max = [] # Maximum scores of the test episodes
 
+    # Pre-training
+    model = pre_train(model,reshape_function, pre_train_data)
 
-    # Play one game with random weights
-    print("First game after initialization...")
+    # Play one game after pre-training
+    print("First game after pre-training...")
     test_play(model=model, reshape_function=reshape_function)
 
     # Set counter and epoch to zero
     count = 0
     epoch = 0
 
-    # Looping over the epochs
-    while count < main_count+pre_count:
+    # Looping over the training counts
+    while count < main_count:
         print("Epoch number: ", str(epoch+1))
         print("Epsilon value: ", str(epsilon))
 
@@ -144,7 +191,7 @@ def training(main_count, pre_count, gamma, model, reshape_function, epsilon=1):
                 # Increase count
                 count += 1
                 # Decrease epsion if it is over the pre-training count
-                if (count >= pre_count) & (epsilon > 0.1):
+                if epsilon > 0.1:
                     epsilon -= 1.5 / main_count
 
             # Update game and score variables
@@ -160,7 +207,7 @@ def training(main_count, pre_count, gamma, model, reshape_function, epsilon=1):
         print("Max tile of the training game: ", str(game.max()))
 
         # If test_num games have passed play test games
-        if ((epoch % 500) == 0) and (epoch != 0):
+        if ((epoch % test_freq) == 0) and (epoch != 0):
             print("Running test plays after %s games." %(epoch))
             # Test play
             score_list = avg_test_plays(20, model=model, reshape_function=reshape_function)
@@ -172,9 +219,8 @@ def training(main_count, pre_count, gamma, model, reshape_function, epsilon=1):
             print("Maximum average score after Game %s: " % (epoch + 1,), str(max(test_scores_avg)))
 
     # Test play after last train
-    score_list, _ = test_play(model=model, reshape_function=reshape_function)
+    _, score_list, _ = test_play(model=model, reshape_function=reshape_function)
     print("Maximum average score after Game %s: " % (epoch + 1,), str(max(test_scores_avg)))
-
 
     return train_scores, test_scores_avg, test_scores_min, test_scores_max, model
 
@@ -202,7 +248,7 @@ else:
 
 
 # Run training on model and reshape function
-train_scores, test_scores_avg, test_score_min, test_score_max, model = training(train_count, pre_train_count, gamma, model, reshape_function)
+train_scores, test_scores_avg, test_score_min, test_score_max, model = training(train_count, pre_train_data, gamma, model, reshape_function)
 
 
 # Write out the generated data and the statistics into the hdf5 file given as the output path
@@ -219,10 +265,9 @@ with h5py.File(output_path, 'a') as f:
     f[name].attrs['gamma'] = gamma
     f[name].attrs['batch_size'] = batch_size
     f[name].attrs['buffer'] = buffer
-    f[name].attrs['epochs_num'] = train_count
-    f[name].attrs['pre_train_games'] = pre_train_count
+    f[name].attrs['train_count'] = train_count
     f[name].attrs['reshape_type'] = reshape_type
-    f[name].attrs['test_num'] = test_num
+    f[name].attrs['test_freq'] = test_freq
 
 
 # Save trained model
