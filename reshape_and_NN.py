@@ -78,7 +78,7 @@ def init_flat_model():
     """
     model = Sequential()
     model.add(Dense(
-        256,
+        512,
         activation='relu',
         use_bias=False,
         input_shape=(272,)

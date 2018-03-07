@@ -19,10 +19,10 @@ assert reshape_type in ['onehot', 'linear', 'trig', 'flat']
 output_path = sys.argv[4]
 
 # Fixed variables
-gamma = 0.95
+gamma = 0.9
 epsilon = 1
 batch_size = 32
-buffer = 1000
+buffer = 10000
 test_freq = 100
 
 print("Train count: ", train_count)
@@ -89,10 +89,12 @@ def getReward(state, new_state, score, new_score, running):
     if not running:
         return -1
     # If the game ended
-    elif running and ((state==new_state).sum()==16):
+    elif (state==new_state).sum()==16:
         return -1
     # Else if it reached a new highest tile
-    elif (state.max() < new_state.max()) & (new_state.max() in [128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]):
+    elif (state.max() < new_state.max()) & (new_state.max() in [128, 256, 512]):
+        return 0.5
+    elif (state.max() < new_state.max()) & (new_state.max() in [1024, 2048, 4096, 8192, 16384, 32768, 65536]):
         return 1
     else:
         return 0
