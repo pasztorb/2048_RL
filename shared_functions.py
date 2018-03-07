@@ -1,4 +1,5 @@
 import numpy as np
+import random
 
 from keras.models import Model, Sequential
 from keras.layers import Dense, Flatten, Conv2D, Input, concatenate
@@ -66,6 +67,33 @@ def flat_reshape(state):
     onehot_state = onehot_reshape(state)
     return onehot_state.reshape((1,onehot_state.shape[1]*onehot_state.shape[2]*onehot_state.shape[3]))
 
+"""
+Reward function
+"""
+def getReward(state, new_state, score, new_score, running):
+    """
+    Function that returns the reward given the state and action made.
+    :param state: s_i
+    :param new_state: s_{i+1}
+    :param score: score at time i
+    :param new_score: score at time i+1
+    :param running: boolean variable that is true if the game is still going
+    :return: reward value
+    """
+    # if it makes a move that does not change the placement of the tiles
+    if not running:
+        return -1
+    # If the game ended
+    elif (state==new_state).sum()==16:
+        return -1
+    # Else if it reached a new highest tile
+    elif (state.max() < new_state.max()) & (new_state.max() in [128, 256, 512]):
+        return 0.5
+    elif (state.max() < new_state.max()) & (new_state.max() in [1024, 2048, 4096, 8192, 16384, 32768, 65536]):
+        return 1
+    else:
+        return 0
+
 
 """
 Different neural nets to work with
@@ -78,13 +106,13 @@ def init_flat_model():
     """
     model = Sequential()
     model.add(Dense(
-        512,
+        256,
         activation='relu',
         use_bias=False,
         input_shape=(272,)
     ))
     model.add(Dense(
-        256,
+        128,
         use_bias=False,
         activation='relu'
     ))
@@ -151,3 +179,47 @@ def init_conv_model(input_shape):
     model.compile(loss='mse', optimizer=opt)
     return model
 
+
+
+"""
+Replay training function
+"""
+def replay_train(reshape_function, model, replay, batch_size, gamma):
+    """
+    Calculates the target output from the replay variables and updates the model
+    :param reshape_function: given reshape function
+    :param model: model in training
+    :param replay: replay deque object
+    :param batch_size: batch_size
+    :param gamma: The discount factor
+    :return: model
+    """
+    # input list of tuples: (game ,action, reward, new_game, running)
+    # Random sampling
+    sample_batch = random.sample(replay, batch_size)
+
+    # training data sets
+    X_train = []
+    Y_train = []
+
+    for state, action, reward, next_state, running in sample_batch:
+        # Calculate reward
+        target = reward
+        if running:
+          target = reward + gamma * np.amax(model.predict(reshape_function(next_state)))
+        # Calculate current qvalues and the target
+        reshaped_state = reshape_function(state)
+        target_f = model.predict(reshaped_state)
+        target_f[0][action] = target
+        # Appending sample to the batch datasets
+        Y_train += [target_f]
+        X_train += [reshaped_state]
+
+    # merging the data
+    X_train = np.concatenate(X_train, axis = 0)
+    Y_train = np.concatenate(Y_train, axis = 0)
+
+    # Train the network
+    model.fit(X_train, Y_train, epochs=1, verbose=0)
+
+    return model

@@ -6,7 +6,7 @@ import datetime
 
 from game import *
 from embedding_2048 import *
-from reshape_and_NN import onehot_reshape
+from shared_functions import onehot_reshape
 
 from keras.models import Model
 from keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, Input, concatenate
