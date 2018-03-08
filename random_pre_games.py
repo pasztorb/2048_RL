@@ -27,7 +27,7 @@ for i in range(pre_game_num):
             else:
                 f[name].attrs["running"] = True
 
-    if i%10==0:
+    if i%100==0:
         print("Done with plays: ",i)
 
 # Add the lengths as an attribe of the file

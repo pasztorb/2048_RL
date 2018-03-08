@@ -14,10 +14,16 @@ reshape_type = sys.argv[1]
 assert reshape_type in ['onehot', 'linear', 'trig', 'flat']
 run_id = sys.argv[2]
 input_data = sys.argv[3]
+print("Reshape_type: ", reshape_type)
+print("Run id: ", run_id)
+print("Input data: ", input_data)
 
 gamma = 0.9
 batch_size = 32
 buffer = 10000
+print("Gamma: ", gamma)
+print("Batch size: ",batch_size)
+print("Buffer: ", buffer)
 
 """
 Initializing the neural network
@@ -76,7 +82,7 @@ with h5py.File(input_data, 'a') as f:
             if buffer <= len(pre_memory):
                 model = replay_train(reshape_function, model, pre_memory, batch_size, gamma)
 
-        if i%5 == 0:
+        if i%100 == 0:
             print("pre-trained for: ",i," games")
 
 # Play one game before starting the training
