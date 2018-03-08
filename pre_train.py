@@ -2,6 +2,7 @@ from shared_functions import *
 from game import *
 import sys
 import h5py
+import numpy as np
 from collections import deque
 
 
@@ -81,9 +82,11 @@ with h5py.File(input_data, 'a') as f:
 
             if buffer <= len(pre_memory):
                 model = replay_train(reshape_function, model, pre_memory, batch_size, gamma)
-
-        if i%100 == 0:
-            print("pre-trained for: ",i," games")
+        # Print feedback and evaluate model
+        if (i+1)%250 == 0:
+            print("Pre-trained for: ",i," games")
+            score_list = avg_test_plays(20, model=model, reshape_function=reshape_function)
+            print("Average, min and max of the test scores: ", np.mean(score_list), min(score_list), max(score_list))
 
 # Play one game before starting the training
 print("First game after pre-training...")
