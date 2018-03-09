@@ -15,11 +15,11 @@ from keras.models import load_model
 
 train_count = int(sys.argv[1])
 input_model_path = sys.argv[2]
-input_model_path = input_model_path.split(sep='/')[-1]
+model_name = input_model_path.split(sep='/')[-1]
 
-reshape_type = input_model_path.split(sep='_')[0]
+reshape_type = model_name.split(sep='_')[0]
 assert reshape_type in ['onehot', 'linear', 'trig', 'flat']
-run_id = input_model_path.split(sep='_')[-1][:-5]
+run_id = model_name.split(sep='_')[-1][:-5]
 
 print("Reshape type: ", reshape_type)
 print("Run ID:", run_id)
