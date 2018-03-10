@@ -205,7 +205,7 @@ def replay_train(reshape_function, model, replay, batch_size, gamma):
     for state, action, reward, next_state, running in sample_batch:
         # Calculate reward
         target = reward
-        if running:
+        if reward != -1:
           target = reward + gamma * np.amax(model.predict(reshape_function(next_state)))
         # Calculate current qvalues and the target
         reshaped_state = reshape_function(state)
