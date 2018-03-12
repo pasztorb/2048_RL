@@ -19,7 +19,7 @@ print("Reshape_type: ", reshape_type)
 print("Run id: ", run_id)
 print("Input data: ", input_data)
 
-gamma = 0.95
+gamma = 0.9
 batch_size = 32
 buffer = 10000
 print("Gamma: ", gamma)

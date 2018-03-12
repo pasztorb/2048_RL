@@ -112,7 +112,7 @@ def init_flat_model():
         input_shape=(272,)
     ))
     model.add(Dense(
-        256,
+        128,
         use_bias=False,
         activation='relu'
     ))
@@ -123,7 +123,7 @@ def init_flat_model():
 
     print(model.summary())
 
-    opt = RMSprop()
+    opt = Adam()
     model.compile(loss='mse', optimizer=opt)
 
     return model
