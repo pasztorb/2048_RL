@@ -21,7 +21,7 @@ print("Input data: ", input_data)
 
 gamma = 0.9
 batch_size = 32
-buffer = 50000
+buffer = 100000
 print("Gamma: ", gamma)
 print("Batch size: ",batch_size)
 print("Buffer: ", buffer)
