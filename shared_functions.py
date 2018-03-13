@@ -1,5 +1,6 @@
 import numpy as np
 import random
+import time
 
 from keras.models import Model, Sequential
 from keras.layers import Dense, Flatten, Conv2D, Input, concatenate
@@ -123,7 +124,7 @@ def init_flat_model():
 
     print(model.summary())
 
-    opt = Adam()
+    opt = Adam(lr=0.001)
     model.compile(loss='mse', optimizer=opt)
 
     return model
@@ -200,24 +201,25 @@ def replay_train(reshape_function, model, replay, batch_size, gamma):
 
     # training data sets
     X_train = []
-    Y_train = []
+    update_tuples = []
 
     for state, action, reward, next_state, running in sample_batch:
         # Calculate reward
         target = reward
         if reward != -1:
           target = reward + gamma * np.amax(model.predict(reshape_function(next_state)))
-        # Calculate current qvalues and the target
+        # Reshape the current state
         reshaped_state = reshape_function(state)
-        target_f = model.predict(reshaped_state)
-        target_f[0][action] = target
-        # Appending sample to the batch datasets
-        Y_train += [target_f]
+        # Appending the tuple and the reshaped state to the lists
+        update_tuples +=[(action, target)]
         X_train += [reshaped_state]
 
-    # merging the data
+    # Calculate the output of X_train
     X_train = np.concatenate(X_train, axis = 0)
-    Y_train = np.concatenate(Y_train, axis = 0)
+    Y_train = model.predict(X_train)
+    # Update Y_train based on the update tuples
+    for i,t in enumerate(update_tuples):
+        Y_train[i,t[0]] = t[1]
 
     # Train the network
     model.fit(X_train, Y_train, epochs=1, verbose=0)
