@@ -56,8 +56,8 @@ def shift_row(row, score):
     # Checks if there is possible merge in the row
     possible_merge = False
     unique, counts = np.unique(row, return_counts=True)
-    for i in range(unique.shape[0]):
-        if (counts[i] > 1) and (unique[i] != 0):
+    for u,c in zip(unique, counts):
+        if (c > 1) and (u != 0):
             possible_merge = True
     # If merge is possible, iterates over the possible patterns
     if possible_merge:
@@ -113,12 +113,15 @@ def action_move(state, score, move, end_check = True):
         running = False
         # If there is at least one zero in the state go on, since move is possible
         if np.where(new_state==0)[0].shape[0] == 0:
-            # Iterate over the actions
-            for action in range(4):
-                tmp_state, _, _ = action_move(new_state, 0, action, end_check=False)
-                # If the tmp_state is not identical to the new_state
-                if (new_state == tmp_state).sum() != 16:
-                    running = True
+            # Iterate over left-top 3x3 to check if any tile has the a neighbour to its right or down that is the same (i.e. move is possible)
+            for i in range(3):
+                for j in range(3):
+                    if new_state[i,j] == new_state[i+1,j]:
+                        running = True
+                        break
+                    if new_state[i,j] == new_state[i,j+1]:
+                        running = True
+                        break
         else:
             running = True
 

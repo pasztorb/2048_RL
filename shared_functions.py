@@ -18,16 +18,16 @@ def onehot_reshape(state):
     :param state: 4x4 numpy array representing the current state
     :return: 1x17x4x4
     """
-    # Initialize the output array
-    reshaped_state = np.zeros((17,4,4))
-    reshaped_state[0,:,:] = 1
-    # Find the non-empty tiles
-    places = np.where(state != 0)
-    # In each tile change the value of the array
-    for i in range(places[0].shape[0]):
-        value = int(np.log(state[places[0][i], places[1][i]])/np.log(2))
-        reshaped_state[value, places[0][i], places[1][i]] = 1
-        reshaped_state[0, places[0][i], places[1][i]] = 0
+    # Change the state values to integer categories from 1 to 17
+    log_state = state
+    log_state[log_state==0]=1
+    log_state = (np.log(log_state)/np.log(2)).astype(int)
+    # Initialize the output state
+    reshaped_state = np.zeros((17,16), dtype=np.uint8)
+    # Add the ones to the given places
+    reshaped_state[log_state.ravel(),np.arange(16)] = 1
+    # Reshape the state representation to (17,4,4)
+    reshaped_state.shape = (17,)+(4,4)
 
     return reshaped_state[np.newaxis, :, :, :]
 
@@ -50,11 +50,15 @@ def trig_reshape(state):
     :param state: 20x4x4 numpy array
     :return: 1x3x4x4 numpy array
     """
+    # Additional scale
+    lin_scale = state/(2**16)
     # Sine scale
-    sine_scale = np.vectorize(lambda x: np.sin(x * 2 * np.pi))(state/(2**16))
-    cos_scale = np.vectorize(lambda x: np.cos(x * 2 * np.pi))(state/(2**16))
-    sigmoid_scale = np.vectorize(lambda x: 1/(1 + np.exp(-0.5*(x*20-10))))(state/(2**16))
-
+    sine_scale = np.vectorize(lambda x: np.sin(x * 2 * np.pi))(lin_scale)
+    # Cosine scale
+    cos_scale = np.vectorize(lambda x: np.cos(x * 2 * np.pi))(lin_scale)
+    # Sigmoid scale
+    sigmoid_scale = np.vectorize(lambda x: 1/(1 + np.exp(-0.5*(x*20-10))))(lin_scale)
+    # Stack them together
     new_state = np.stack([sine_scale, cos_scale, sigmoid_scale])
 
     return new_state[np.newaxis, :, :, :]
