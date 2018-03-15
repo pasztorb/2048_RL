@@ -19,7 +19,7 @@ def onehot_reshape(state):
     :return: 1x17x4x4
     """
     # Change the state values to integer categories from 1 to 17
-    log_state = state
+    log_state = state.copy()
     log_state[log_state==0]=1
     log_state = (np.log(log_state)/np.log(2)).astype(int)
     # Initialize the output state
@@ -39,7 +39,10 @@ def linear_reshape(state):
     :param state: 4x4 numpy array
     :return: 1x1x4x4 numpy array
     """
-    new_state = state/(2**16)
+    new_state = state.copy()
+    new_state[new_state == 0] = 1
+    new_state = np.log(new_state) / np.log(2)
+    new_state = new_state / 16
     return new_state[np.newaxis,np.newaxis,:,:]
 
 
@@ -50,8 +53,8 @@ def trig_reshape(state):
     :param state: 20x4x4 numpy array
     :return: 1x3x4x4 numpy array
     """
-    # Additional scale
-    lin_scale = state/(2**16)
+    # Additional scale that rescales the numbers from one to
+    lin_scale = linear_reshape(state)[0,0,:,:]
     # Sine scale
     sine_scale = np.vectorize(lambda x: np.sin(x * 2 * np.pi))(lin_scale)
     # Cosine scale
