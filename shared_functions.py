@@ -1,6 +1,5 @@
 import numpy as np
 import random
-import time
 
 from keras.models import Model, Sequential
 from keras.layers import Dense, Flatten, Conv2D, Input, concatenate
@@ -131,7 +130,7 @@ def init_flat_model():
 
     print(model.summary())
 
-    opt = Adam(lr=0.001)
+    opt = Adam()
     model.compile(loss='mse', optimizer=opt)
 
     return model
@@ -183,7 +182,7 @@ def init_conv_model(input_shape):
 
     print(model.summary())
 
-    opt = RMSprop()
+    opt = Adam()
     model.compile(loss='mse', optimizer=opt)
     return model
 

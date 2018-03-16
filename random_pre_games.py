@@ -32,4 +32,4 @@ for i in range(pre_game_num):
 
 # Add the lengths as an attribe of the file
 with h5py.File("data/"+output,'a') as f:
-    f.attrs["lengths"] = lengths
+    f["lengths"] = lengths

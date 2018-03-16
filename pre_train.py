@@ -3,6 +3,7 @@ from game import *
 import sys
 import h5py
 import numpy as np
+import time
 from collections import deque
 
 
@@ -56,9 +57,11 @@ Pre-training
 print("Pre-training...")
 # Replay memory
 pre_memory = deque(maxlen=buffer) # Replay storage
+training_steps = 0 # Counter for the training steps
+start_time = time.time()
 
 with h5py.File(input_data, 'a') as f:
-    lengths = f.attrs['lengths']
+    lengths = f['lengths']
     # Iterate over the lengths list
     for i, length in enumerate(lengths):
         # For each game iterate over the states
@@ -82,6 +85,7 @@ with h5py.File(input_data, 'a') as f:
 
             if buffer <= len(pre_memory):
                 model = replay_train(reshape_function, model, pre_memory, batch_size, gamma)
+                training_steps += 1
         # Print feedback and evaluate model
         if (i+1)%250 == 0:
             print("Pre-trained for: ",i," games")
@@ -89,6 +93,8 @@ with h5py.File(input_data, 'a') as f:
             print("Average, min and max of the test scores: ", np.mean(score_list), min(score_list), max(score_list))
 
 # Play one game before starting the training
+print("Number of training steps: ", training_steps)
+print("Time of the training: ", time.time()-start_time)
 print("First game after pre-training...")
 test_play(model=model, reshape_function=reshape_function)
 
