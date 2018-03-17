@@ -29,7 +29,7 @@ gamma = 0.9
 epsilon = 1
 batch_size = 32
 buffer = 100000
-test_freq = 250
+test_freq = 50000
 
 print("Train count: ", train_count)
 print("Reshape type: ",reshape_type)
@@ -123,8 +123,9 @@ while count < train_count:
     print("Max tile of the training game: ", str(game.max()))
 
     # If test_num games have passed play test games
-    if ((epoch % test_freq) == 0) and (epoch != 0) and (buffer <= len(memory)):
+    if ((count % test_freq) == 0) and (buffer <= len(memory)):
         print("Running test plays after %s games." %(epoch))
+        print("Number of training steps done: ", count)
         # Test play
         score_list = avg_test_plays(20, model=model, reshape_function=reshape_function)
         print("Average, min and max of the test scores: ", np.mean(score_list), min(score_list), max(score_list))
