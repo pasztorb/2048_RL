@@ -137,7 +137,10 @@ while count < train_count:
 
 # Test play after last train
 _, score_list, _ = test_play(model=model, reshape_function=reshape_function)
-print("Maximum average score after Game %s: " % (epoch + 1,), str(max(test_scores_avg)))
+try:
+    print("Maximum average score after Game %s: " % (epoch + 1,), str(max(test_scores_avg)))
+except:
+    print("Something is still bad with test_scores_avg", test_scores_avg)
 
 
 # Write out the generated data and the statistics into the hdf5 file given as the output path
