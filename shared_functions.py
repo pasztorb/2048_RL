@@ -4,14 +4,14 @@ import random
 from keras.models import Model, Sequential
 from keras.layers import Dense, Flatten, Conv2D, Input, concatenate
 from keras.layers.core import Permute
-from keras.optimizers import Adam, SGD, RMSprop
+from keras.optimizers import Adam
 
 
 """
 Different functions for reshaping the 20x4x4 array before feeding into the neural network
 """
 
-def onehot_reshape(state):
+def onehot_reshape(state, flat=False):
     """
     Reshapes the 4x4 array into a 1x17x4x4 so that the keras model will recognize it properly
     :param state: 4x4 numpy array representing the current state
@@ -28,10 +28,13 @@ def onehot_reshape(state):
     # Reshape the state representation to (17,4,4)
     reshaped_state.shape = (17,)+(4,4)
 
-    return reshaped_state[np.newaxis, :, :, :]
+    if not flat:
+        return reshaped_state[np.newaxis, :, :, :]
+    if flat:
+        return reshaped_state.reshape(1,272)
 
 
-def linear_reshape(state):
+def linear_reshape(state, flat=False):
     """
     Reshapes the state variable as a 1x4x4 matrix where each tile is represented as number between 0 and 1.
     The higher value tiles are represented by larger numbers. It assumes that the largest tile possible is 2^16
@@ -42,10 +45,13 @@ def linear_reshape(state):
     new_state[new_state == 0] = 1
     new_state = np.log(new_state) / np.log(2)
     new_state = new_state / 16
-    return new_state[np.newaxis,np.newaxis,:,:]
+    if not flat:
+        return new_state[np.newaxis, np.newaxis, :, :]
+    if flat:
+        return new_state.reshape(1,16)
 
 
-def trig_reshape(state):
+def trig_reshape(state, flat = False):
     """
     Reshapes the state into a 1x3x4x4 array where the second axis is a sine, cose and a sigmoid like value.
     It assumes that the largest tile possible is 2^16
@@ -63,16 +69,11 @@ def trig_reshape(state):
     # Stack them together
     new_state = np.stack([sine_scale, cos_scale, sigmoid_scale])
 
-    return new_state[np.newaxis, :, :, :]
+    if not flat:
+        return new_state[np.newaxis, :, :, :]
+    if flat:
+        return new_state.reshape(1,48)
 
-def flat_reshape(state):
-    """
-    Reshapes the state variable into a flat array
-    :param state: 4x4 numpy array
-    :return: 1x272 numpy array
-    """
-    onehot_state = onehot_reshape(state)
-    return onehot_state.reshape((1,onehot_state.shape[1]*onehot_state.shape[2]*onehot_state.shape[3]))
 
 """
 Reward function
@@ -106,17 +107,18 @@ def getReward(state, new_state, score, new_score, running):
 Different neural nets to work with
 """
 
-def init_flat_model():
+def init_flat_model(input_size):
     """
     Simple feed forward network
     :return: compiled model
     """
+    print("Input size of the flat model: ", input_size)
     model = Sequential()
     model.add(Dense(
         256,
         activation='relu',
         use_bias=False,
-        input_shape=(272,)
+        input_shape=(input_size,)
     ))
     model.add(Dense(
         128,
@@ -148,26 +150,43 @@ def init_conv_model(input_shape):
     # Switch row and column axis
     permut_input = Permute((1,3,2), input_shape=(input_shape[0],input_shape[1],input_shape[2]))(state_input)
 
-    conv_2d = Conv2D(filters=filter_size_1,
+    # Column convolutions
+    col_conv_1 = Conv2D(filters=filter_size_1,
                      kernel_size=(4,1),
                      strides=(4,1),
                      use_bias=False,
                      data_format='channels_first',
-                     name='first_conv',
+                     name='col_conv_1',
                      input_shape=(input_shape[0],input_shape[1],input_shape[2]))
-    conv_1d = Conv2D(filters=filter_size_2,
+    col_conv_2 = Conv2D(filters=filter_size_2,
                      kernel_size=(1,1),
                      strides=(1,1),
                      use_bias=False,
                      data_format='channels_first',
-                     name='1x1_conv')
+                     name='col_conv_2')
 
-    conv_1 = conv_2d(state_input)
-    conv_1 = conv_1d(conv_1)
+    conv_1 = col_conv_1(state_input)
+    conv_1 = col_conv_2(conv_1)
     conv_1 = Flatten()(conv_1)
 
-    conv_2 = conv_2d(permut_input)
-    conv_2 = conv_1d(conv_2)
+    # Row convolutions
+    row_conv_1 = Conv2D(filters=filter_size_1,
+                     kernel_size=(4,1),
+                     strides=(4,1),
+                     use_bias=False,
+                     data_format='channels_first',
+                     name='row_conv_1',
+                     input_shape=(input_shape[0],input_shape[1],input_shape[2]))
+    row_conv_2 = Conv2D(filters=filter_size_2,
+                     kernel_size=(1,1),
+                     strides=(1,1),
+                     use_bias=False,
+                     data_format='channels_first',
+                     name='row_conv_2')
+
+    # Dense layer
+    conv_2 = row_conv_1(permut_input)
+    conv_2 = row_conv_2(conv_2)
     conv_2 = Flatten()(conv_2)
 
     output = concatenate([conv_1, conv_2])

@@ -17,10 +17,13 @@ train_count = int(sys.argv[1])
 input_model_path = sys.argv[2]
 model_name = input_model_path.split(sep='/')[-1]
 
-reshape_type = model_name.split(sep='_')[0]
-assert reshape_type in ['onehot', 'linear', 'trig', 'flat']
+network_type = model_name.split(sep='_')[0]
+assert network_type in ['conv', 'flat']
+reshape_type = model_name.split(sep='_')[1]
+assert reshape_type in ['onehot', 'linear', 'trig']
 run_id = model_name.split(sep='_')[-1][:-5]
 
+print("Network type: ", network_type)
 print("Reshape type: ", reshape_type)
 print("Run ID:", run_id)
 
@@ -28,8 +31,8 @@ print("Run ID:", run_id)
 gamma = 0.9
 epsilon = 1
 batch_size = 32
-buffer = 100000
-test_freq = 50000
+buffer = 200000
+test_freq = 500
 
 print("Train count: ", train_count)
 print("Reshape type: ",reshape_type)
@@ -40,16 +43,23 @@ Loading the model and prepare for training
 """
 # Choose reshape function and game_shape_after_reshaping based on reshape_type
 if reshape_type == 'onehot':
-    reshape_function = onehot_reshape
+    if network_type == 'conv':
+        reshape_function = onehot_reshape
+    else:
+        reshape_function = lambda  x: onehot_reshape(x, flat=True)
     game_shape_after_reshaping = (17, 4, 4)
 elif reshape_type == 'linear':
-    reshape_function = linear_reshape
+    if network_type == 'conv':
+        reshape_function = linear_reshape
+    else:
+        reshape_function = lambda x: linear_reshape(x, flat=True)
     game_shape_after_reshaping = (1, 4, 4)
 elif reshape_type == 'trig':
-    reshape_function = trig_reshape
+    if network_type == 'conv':
+        reshape_function = trig_reshape
+    else:
+        reshape_function = lambda x: trig_reshape(x, flat=True)
     game_shape_after_reshaping = (3, 4, 4)
-elif reshape_type == 'flat':
-    reshape_function = flat_reshape
 
 # Load in the model
 model = load_model(input_model_path)
@@ -123,7 +133,7 @@ while count < train_count:
     print("Max tile of the training game: ", str(game.max()))
 
     # If test_num games have passed play test games
-    if ((count % test_freq) == 0) and (buffer <= len(memory)):
+    if ((epoch % test_freq) == 0) and (buffer <= len(memory)):
         print("Running test plays after %s games." %(epoch))
         print("Number of training steps done: ", count)
         # Test play
@@ -135,12 +145,10 @@ while count < train_count:
         test_scores_max += [max(score_list)]
         print("Maximum average score after Game %s: " % (epoch + 1,), str(max(test_scores_avg)))
 
+
 # Test play after last train
 _, score_list, _ = test_play(model=model, reshape_function=reshape_function)
-try:
-    print("Maximum average score after Game %s: " % (epoch + 1,), str(max(test_scores_avg)))
-except:
-    print("Something is still bad with test_scores_avg", test_scores_avg)
+print("Maximum average score after Game %s: " % (epoch + 1,), str(max(test_scores_avg)))
 
 
 # Write out the generated data and the statistics into the hdf5 file given as the output path
@@ -159,6 +167,7 @@ with h5py.File("train_statistics_"+run_id+".hdf5", 'a') as f:
     f[name].attrs['buffer'] = buffer
     f[name].attrs['train_count'] = train_count
     f[name].attrs['reshape_type'] = reshape_type
+    f[name].attrs['network_type'] = network_type
     f[name].attrs['test_freq'] = test_freq
 
 

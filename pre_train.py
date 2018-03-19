@@ -9,20 +9,22 @@ from collections import deque
 
 """
 This python file initialize a network and pre-trains it for the given data
-python3 pre_train.py type id input_data
+python3 pre_train.py network_type reshape_type id input_data
 """
 
-reshape_type = sys.argv[1]
-assert reshape_type in ['onehot', 'linear', 'trig', 'flat']
-run_id = sys.argv[2]
-input_data = sys.argv[3]
+network_type = sys.argv[1]
+assert network_type in ['flat', 'conv']
+reshape_type = sys.argv[2]
+assert reshape_type in ['onehot', 'linear', 'trig']
+run_id = sys.argv[3]
+input_data = sys.argv[4]
 print("Reshape_type: ", reshape_type)
 print("Run id: ", run_id)
 print("Input data: ", input_data)
 
 gamma = 0.9
 batch_size = 32
-buffer = 100000
+buffer = 250000
 print("Gamma: ", gamma)
 print("Batch size: ",batch_size)
 print("Buffer: ", buffer)
@@ -32,23 +34,30 @@ Initializing the neural network
 """
 # Choose reshape function and game_shape_after_reshaping based on reshape_type
 if reshape_type == 'onehot':
-    reshape_function = onehot_reshape
+    if network_type == 'conv':
+        reshape_function = onehot_reshape
+    else:
+        reshape_function = lambda x: onehot_reshape(x, flat=True)
     game_shape_after_reshaping = (17, 4, 4)
 elif reshape_type == 'linear':
-    reshape_function = linear_reshape
+    if network_type == 'conv':
+        reshape_function = linear_reshape
+    else:
+        reshape_function = lambda x: linear_reshape(x, flat=True)
     game_shape_after_reshaping = (1, 4, 4)
 elif reshape_type == 'trig':
-    reshape_function = trig_reshape
+    if network_type == 'conv':
+        reshape_function = trig_reshape
+    else:
+        reshape_function = lambda x: trig_reshape(x, flat=True)
     game_shape_after_reshaping = (3, 4, 4)
-elif reshape_type == 'flat':
-    reshape_function = flat_reshape
 
 
 # Initialize model, if reshape_style is 'flat' initialize a feed-forward net otherwise a convolutional
-if reshape_type in ['onehot', 'linear', 'trig']:
+if network_type == 'conv':
     model = init_conv_model(game_shape_after_reshaping)
 else:
-    model = init_flat_model()
+    model = init_flat_model(np.prod(game_shape_after_reshaping))
 
 
 """
@@ -88,7 +97,7 @@ with h5py.File(input_data, 'a') as f:
                 training_steps += 1
         # Print feedback and evaluate model
         if (i+1)%250 == 0:
-            print("Pre-trained for: ",i," games")
+            print("Pre-trained for: ",i+1," games")
             score_list = avg_test_plays(20, model=model, reshape_function=reshape_function)
             print("Average, min and max of the test scores: ", np.mean(score_list), min(score_list), max(score_list))
 
@@ -102,4 +111,4 @@ test_play(model=model, reshape_function=reshape_function)
 Save the pre-trained network
 """
 # Save trained model
-model.save(reshape_type+"_model_"+run_id+".hdf5")
+model.save(network_type+'_'+reshape_type+"_model_"+run_id+".hdf5")
