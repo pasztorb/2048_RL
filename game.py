@@ -113,16 +113,11 @@ def action_move(state, score, move, end_check = True):
         running = False
         # If there is at least one zero in the state go on, since move is possible
         if (new_state==0).sum() == 0:
-            # Iterate over left-top 3x3 to check if any tile has the a neighbour to its right or down that is the same (i.e. move is possible)
-            for i in range(3):
-                for j in range(3):
-                    if new_state[i,j] == new_state[i+1,j]:
-                        running = True
-                        break
-                    if new_state[i,j] == new_state[i,j+1]:
-                        running = True
-                        break
-            if (new_state[3,3] == new_state[2,3]) or (new_state[3,3]==new_state[3,2]):
+            # Check horizontal moves
+            if (new_state[:,:-1]==new_state[:,1:]).sum() != 0:
+                running = True
+            # Check vertical moves
+            elif (new_state[:-1,:]==new_state[1:,:]).sum() != 0:
                 running = True
         else:
             running = True

@@ -98,7 +98,7 @@ with h5py.File(input_data, 'a') as f:
         # Print feedback and evaluate model
         if (i+1)%250 == 0:
             print("Pre-trained for: ",i+1," games")
-            score_list = avg_test_plays(20, model=model, reshape_function=reshape_function)
+            score_list = avg_test_plays(50, model=model, reshape_function=reshape_function)
             print("Average, min and max of the test scores: ", np.mean(score_list), min(score_list), max(score_list))
 
 # Play one game before starting the training

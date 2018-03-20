@@ -2,7 +2,7 @@ import numpy as np
 import random
 
 from keras.models import Model, Sequential
-from keras.layers import Dense, Flatten, Conv2D, Input, concatenate
+from keras.layers import Dense, Flatten, Conv2D, Input, concatenate, Add
 from keras.layers.core import Permute
 from keras.optimizers import Adam
 
@@ -189,13 +189,23 @@ def init_conv_model(input_shape):
     conv_2 = row_conv_2(conv_2)
     conv_2 = Flatten()(conv_2)
 
-    output = concatenate([conv_1, conv_2])
+    concat = concatenate([conv_1, conv_2])
 
-    output = Dense(256,
+    # Action stream
+    action = Dense(256,
                    activation='relu',
                    use_bias=False
-                   )(output)
-    output = Dense(4, activation='linear')(output)
+                   )(concat)
+    action = Dense(4, activation='linear',use_bias=False)(action)
+
+    # Value stream
+    value = Dense(256,
+                  activation='relu',
+                  use_bias=False)(concat)
+    value = Dense(1, activation='linear',use_bias=False)(value)
+
+    # Add the action and the value stream
+    output = Add()([action, value])
 
     model = Model(inputs=state_input, outputs=output)
 

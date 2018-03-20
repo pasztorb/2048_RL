@@ -31,7 +31,7 @@ print("Run ID:", run_id)
 gamma = 0.9
 epsilon = 1
 batch_size = 32
-buffer = 200000
+buffer = 250000
 test_freq = 500
 
 print("Train count: ", train_count)
