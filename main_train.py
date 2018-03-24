@@ -28,14 +28,13 @@ print("Reshape type: ", reshape_type)
 print("Run ID:", run_id)
 
 # Fixed variables
-gamma = 0.9
+gamma = 0.95
 epsilon = 1
-batch_size = 32
-buffer = 250000
+batch_size = 16
+buffer = 1000000
 test_freq = 500
 
 print("Train count: ", train_count)
-print("Reshape type: ",reshape_type)
 print("Batch size and buffer: ", batch_size, buffer)
 
 """

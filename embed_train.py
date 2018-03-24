@@ -4,15 +4,9 @@ import h5py
 import time
 import datetime
 
-from game import *
 from embedding_2048 import *
-from shared_functions import onehot_reshape
+from shared_functions import *
 
-from keras.models import Model
-from keras.layers import Dense, Dropout, Activation, Flatten, Conv2D, Input, concatenate
-from keras.optimizers import Adam, SGD, RMSprop
-from keras.layers.core import Permute
-from keras.regularizers import l2
 
 # Variables given in command lines
 epochs = int(sys.argv[1])
@@ -34,132 +28,6 @@ Initialize a folder in which the training plots, game states and the model will 
 """
 output_folder = "/"+output_folder
 os.mkdir(output_folder)
-
-"""
-Implementation of the Convolutional network
-"""
-
-def init_model(input_shape, embed_model):
-    filter_size_1 = 128
-    filter_size_2 = 128
-    # Input
-    state_input = Input((input_shape[0],input_shape[1],input_shape[2]))
-    # Embedding convolution
-    embedding_weights = embed_model.get_layer(name='embed_conv').get_weights()
-    embed_conv = Conv2D(filters = embedding_weights[0].shape[-1],
-                        kernel_size = (1, 1),
-                        strides = (1, 1),
-                        use_bias = False,
-                        trainable = False,
-                        name = 'embed_conv',
-                        data_format = "channels_first")
-    embed_conv.set_weights(embedding_weights)
-    embed_input = embed_conv(state_input)
-
-    # Switch row and column axis
-    permut_input = Permute((1,3,2),
-                           input_shape=(input_shape[0],input_shape[1],input_shape[2]))(embed_input)
-
-    conv_2d = Conv2D(filters=filter_size_1,
-                     kernel_size=(4,1),
-                     strides=(4,1),
-                     data_format='channels_first',
-                     name='first_conv',
-                     input_shape=(input_shape[0],input_shape[1],input_shape[2]))
-    conv_1d = Conv2D(filters=filter_size_2,
-                     kernel_size=(1,1),
-                     strides=(1,1),
-                     data_format='channels_first',
-                     name='1x1_conv')
-
-    conv_1 = conv_2d(embed_input)
-    conv_1 = conv_1d(conv_1)
-    conv_1 = Flatten()(conv_1)
-
-    conv_2 = conv_2d(permut_input)
-    conv_2 = conv_1d(conv_2)
-    conv_2 = Flatten()(conv_2)
-
-    output = concatenate([conv_1, conv_2])
-
-    output = Dense(1024,
-                   activation='relu'
-                   )(output)
-    output = Dense(4, activation='linear')(output)
-
-    model = Model(inputs=state_input, outputs=output)
-
-    print(model.summary())
-
-    opt = Adam()
-    model.compile(loss='mse', optimizer=opt)
-
-    return model
-
-
-def replay_to_matrix(reshape_function, model, list, gamma):
-    """
-    Calculates the target output from the replay variables
-    :param reshape_function: given reshape function
-    :param model: model in training
-    :param list: list of replay tuples
-    :return: X_train, Y_train
-    """
-    # input list of tuples: (game ,action, reward, new_game, running)
-    X_train, Y_train = [], []
-
-    for i in list:
-        # Calculate Q(s_i)
-        x = reshape_function(i[0])
-        qval = model.predict(x, batch_size=1)
-
-        # Calculate Q(s_{i+1})
-        newQ = model.predict(reshape_function(i[3]), batch_size=1)
-        maxQ = np.max(newQ)
-
-        # Calculate the target output
-        y = np.zeros((1, 4))
-        y[:] = qval[:]
-
-        # Update target value
-        # If the new state is not terminal and it made a valid move
-        if i[4] == True and ((i[0]==i[3]).sum() != game_shape[0]*game_shape[1]*game_shape[2]):
-            y[0][i[1]] = (i[2] + (gamma * maxQ))
-        else:
-            y[0][i[1]] = i[2]
-
-        # Append to X_train, Y_train
-        X_train.append(x)
-        Y_train.append(y)
-
-    # Concatenate the individual training and target variables
-    X_train = np.concatenate(X_train, axis=0)
-    Y_train = np.concatenate(Y_train, axis=0)
-
-    return X_train, Y_train
-
-
-def getReward(state, new_state, score, new_score, running):
-    """
-    Function that returns the reward given the state and action made.
-    :param state: s_i
-    :param new_state: s_{i+1}
-    :param score: score at time i
-    :param new_score: score at time i+1
-    :param running: boolean variable that is true if the game is still going
-    :return: reward value
-    """
-    # if it makes a move that does not change the placement of the tiles
-    if not running:
-        return -20
-    # If the game ended
-    elif running and ((state==new_state).sum()==game_shape[0]*game_shape[1]*game_shape[2]):
-        return -3
-    # Else if it reached a new highest tile
-    elif np.where(state==1)[0].max() < np.where(new_state==1)[0].max():
-        return 2
-    else:
-        return 1
 
 
 """
