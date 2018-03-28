@@ -28,9 +28,9 @@ print("Reshape type: ", reshape_type)
 print("Run ID:", run_id)
 
 # Fixed variables
-gamma = 0.95
+gamma = 0.9
 epsilon = 1
-batch_size = 16
+batch_size = 32
 buffer = 1000000
 test_freq = 500
 
@@ -108,8 +108,17 @@ while count < train_count:
         # Observe Reward
         reward = getReward(game, new_game, score, new_score, running)
 
-        # Add the current state to the experience replay storage
-        memory.append((game, action, reward, new_game, running))
+        # Selective addition to the memory
+        # If the current action does not changed the table
+        if (game == new_game).all():
+            # If in the previous game it did not changed anything either and made the same action
+            prev_game = memory[-1][0]
+            prev_action = memory[-1][1]
+            if not ((game == prev_game).all() and (action == prev_action)):
+                memory.append((game, action, reward, new_game, running))
+        # Else add to memory
+        else:
+            memory.append((game, action, reward, new_game, running))
 
         if buffer <= len(memory):
             model = replay_train(reshape_function, model, memory, batch_size, gamma)
