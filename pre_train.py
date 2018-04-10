@@ -9,23 +9,24 @@ from collections import deque
 
 """
 This python file initialize a network and pre-trains it for the given data
-python3 pre_train.py network_type reshape_type id input_data
+python3 pre_train.py network_type reshape_type gamma id input_data
 """
 
 network_type = sys.argv[1]
 assert network_type in ['flat', 'conv']
 reshape_type = sys.argv[2]
 assert reshape_type in ['onehot', 'linear', 'trig']
-run_id = sys.argv[3]
-input_data = sys.argv[4]
+gamma = sys.argv[3]
+run_id = sys.argv[4]
+input_data = sys.argv[5]
 print("Reshape_type: ", reshape_type)
+print("Network type: ", network_type)
+print("Gamma: ", gamma)
 print("Run id: ", run_id)
 print("Input data: ", input_data)
 
-gamma = 0.9
 batch_size = 32
 buffer = 1000000
-print("Gamma: ", gamma)
 print("Batch size: ",batch_size)
 print("Buffer: ", buffer)
 

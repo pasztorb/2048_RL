@@ -115,13 +115,13 @@ def init_flat_model(input_size):
     print("Input size of the flat model: ", input_size)
     model = Sequential()
     model.add(Dense(
-        256,
+        512,
         activation='relu',
         use_bias=False,
         input_shape=(input_size,)
     ))
     model.add(Dense(
-        128,
+        256,
         use_bias=False,
         activation='relu'
     ))
