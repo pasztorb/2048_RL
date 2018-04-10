@@ -16,7 +16,7 @@ network_type = sys.argv[1]
 assert network_type in ['flat', 'conv']
 reshape_type = sys.argv[2]
 assert reshape_type in ['onehot', 'linear', 'trig']
-gamma = sys.argv[3]
+gamma = int(sys.argv[3])
 run_id = sys.argv[4]
 input_data = sys.argv[5]
 print("Reshape_type: ", reshape_type)
